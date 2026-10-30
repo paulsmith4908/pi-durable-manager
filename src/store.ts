@@ -484,7 +484,25 @@ export class MetadataStore {
       .run(key, JSON.stringify(sanitizeActivity(value, this.activitySecrets)), Date.now());
   }
 
-  /** Lossless workflow state, unlike the intentionally bounded display journal. */
+  /** Exact internal configuration, never an exported activity record or arbitrary worker text.
+   * Callers validate the configuration schema. Secret bytes are prohibited; references are allowed.
+   * Substring redaction here can corrupt endpoints, paths and authorization policies.
+   */
+  setPrivateConfiguration(key: string, value: unknown): void {
+    if (!/^(workflow-model-|workflow-credential-|workflow-worker-permissions:|workflow-permission-result:|assignment-permissions:)/.test(key)) throw new StoreError('invalid_params', 'Private configuration key required.');
+    const check = (v: any): void => {
+      if (!v || typeof v !== 'object') return;
+      for (const [k, item] of Object.entries(v)) {
+        if (/^(apiKey|password|authorization|secret|token)$/i.test(k)) throw new StoreError('invalid_params', 'Secret bytes cannot be persisted in configuration metadata.');
+        check(item);
+      }
+    };
+    check(value);
+    this.db.prepare('INSERT INTO runtime_control(key,value,updated_at) VALUES(?,?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value,updated_at=excluded.updated_at')
+      .run(key, JSON.stringify(value), Date.now());
+  }
+
+  /** Workflow text, unlike exact private configuration, is redacted for disclosure safety. */
   setWorkflowControl(key: string, value: unknown): void {
     if (!key.startsWith("workflow")) throw new StoreError("invalid_params", "Workflow key required.");
     const safe = (v: any): any => typeof v === "string" ? redactString(v, this.activitySecrets)

@@ -80,6 +80,7 @@ test('Mac Chrome renders evidence, trend and ledger safely at narrow widths',{sk
   for(let i=0;i<80;i++)f.call('scorecard.activity',{category:'planning',note:'Historical note '+i});
   app=await startTerminalBrowser({stateDir:tmpdir(),rpc:{async call<T>(method:string,p:any={}):Promise<T>{
     if(method==='workflow.status')return {workflow:f.t,assignments:[{...a,latestActivity:null}],events:[],manager:{enabled:false}} as T;
+    if(method==='workflow.assignments')return {assignments:[{...a,number:1}],selected:a.id,total:1,nextBefore:null,roadmap:''} as T;
     if(method==='projects.show')return {name:'Scorecard fixture',path:'/fixture'} as T;
     if(method==='assignments.list')return {assignments:[a]} as T;
     if(method==='activity.list')return {entries:[],nextCursor:0} as T;

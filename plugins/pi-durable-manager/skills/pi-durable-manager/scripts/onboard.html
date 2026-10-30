@@ -13,7 +13,13 @@
 <label>Maximum output tokens<input id="maxTokens" type="number" min="1" required></label>
 <label class="choice"><input id="reasoning" type="checkbox">Reasoning model</label>
 <p class="hint">This becomes your default model. Add other connections and model profiles anytime in Pi → Settings. DeepSeek-specific compatibility overrides can be set there before running work.</p>
+<details><summary>Worker permissions</summary>
+<label class="choice"><input id="writeFiles" type="checkbox" checked>Allow file editing in assigned projects.</label>
+<label class="choice"><input id="shell" type="checkbox" checked>Allow shell commands (requires file editing).</label>
+<label class="choice"><input id="hostValidation" type="checkbox" checked>Allow configured browser validation checks.</label>
+<p class="hint">These are execution permissions, not repository rules. No AGENTS.md is created. Change defaults, project overrides and excluded paths anytime in Settings. Git metadata and manager state remain protected.</p>
 <label class="choice"><input id="network" type="checkbox">Allow workers to download packages and run local development servers.</label>
+</details>
 <p class="hint">Installation downloads dependencies from npm. If Node is missing, the plugin downloads a checksum-verified private Node runtime. Git and a compatible Codex installation are required.</p>
 <button id="install" type="submit">Install and start Pi Durable</button></form>
 <section aria-live="polite"><p id="status">Opening your private setup session…</p><pre id="details"></pre></section>

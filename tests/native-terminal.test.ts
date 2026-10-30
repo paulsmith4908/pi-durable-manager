@@ -37,7 +37,7 @@ test('Latest leaves history and follows continuations, including an in-flight re
       if (url.startsWith('/assignments') && gate) await gate;
       return { ok: true, json: async () => url.startsWith('/overview')
         ? { status: 'Working', waiting: [], milestones: [], history: [], observedAt: 1 }
-        : { assignments: ['a', 'b', 'c'].map(id => ({ id, state: id === current ? 'running' : 'accepted' })), selected: current } };
+        : { assignments: (url.includes('before=20')?['historical-x']:['a', 'b', 'c']).map(id => ({ id, state: id === current ? 'running' : 'accepted' })), selected: current, total:40, nextBefore:url.includes('before=20')?null:20 } };
     }, setTimeout: () => 0, clearTimeout() {}, setInterval: (f: any) => { poll = f; return 0; }, console };
   runInNewContext(script, context);
   await new Promise(r => setImmediate(r));
@@ -73,6 +73,13 @@ test('Latest leaves history and follows continuations, including an in-flight re
   current = 'b'; doc.visibilityState = 'visible'; handlers.visibilitychange();
   await new Promise(r => setImmediate(r));
   assert.match(last().url, /assignmentId=b/, 'returning to the pane retains live-follow mode');
+  await nodes['older-assignments'].onclick();
+  assert.ok(nodes.assignment.children.some((o:any)=>o.value==='historical-x'),'earlier page is reachable');
+  const oldRequest=requests.filter(u=>u.startsWith('/assignments')).at(-1)!;assert.match(oldRequest,/before=20/);
+  await poll();assert.match(requests.filter(u=>u.startsWith('/assignments')).at(-1)!,/before=20/,'refresh preserves the inspected history page');
+  nodes.assignment.value='historical-x';nodes.assignment.onchange();assert.match(last().url,/historical-x/);
+  await nodes.end.onclick();assert.match(last().url,/assignmentId=b/);assert.ok(!requests.filter(u=>u.startsWith('/assignments')).at(-1)!.includes('before='),'Follow live returns to the head page');
+  assert.ok(nodes.assignment.children.length<=21,'history browsing does not accumulate an unbounded option list');
   handlers.beforeunload();
   assert.ok(Source.instances.every(s => s.closed));
   assert.ok(requests.every(url => /^\/(assignments|overview|view)/.test(url)), 'display controls never submit or stop work');
@@ -284,4 +291,15 @@ test('browser releases hidden streams, preserves output on error and explicitly 
   handlers.pagehide();assert.equal(third.closed,true);
   handlers.pageshow();await new Promise(r=>setImmediate(r));assert.equal(Source.instances.length,5);handlers.beforeunload();
  }finally{await app.close();}
+});
+
+test('terminal footer reports the pinned session model rather than daemon defaults', async()=>{
+ const ui=await loadPiUi(),terminal=new BrowserTerminal(110,24,()=>{}),tui=new TuiAltScreen(terminal,false);
+ const display=new PiWorkerDisplay(ui,tui,assignment,{name:'fixture',path:'/existing/project'});tui.start();
+ try{
+  display.updateStatus({model:'WRONG-DAEMON-MODEL',pid:123},assignment,{snapshots:[]},{pending:0,unacked:0},null,{providerName:'Local provider',profileName:'Coder',model:{modelId:'right-local-model'}});
+  tui.renderNow(true);let text=terminalText(tui.getScreenLines().join('\n'));assert.ok(text.includes('right-local-model'));assert.ok(text.includes('Local provider'));assert.ok(!text.includes('WRONG-DAEMON-MODEL'));
+  display.updateStatus({model:'WRONG-DAEMON-MODEL',pid:123},assignment,{snapshots:[]},{pending:0,unacked:0},null);
+  tui.renderNow(true);text=terminalText(tui.getScreenLines().join('\n'));assert.ok(text.includes('Session model unavailable'));assert.ok(!text.includes('WRONG-DAEMON-MODEL'));
+ }finally{tui.stop({preserveScreen:true});}
 });

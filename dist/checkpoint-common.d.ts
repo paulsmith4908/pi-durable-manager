@@ -74,7 +74,7 @@ export declare const MAX_MANIFEST_FILES = 2000;
 /**
  * Credential/config path segments that must never appear in a manifest entry,
  * even if the manifest was tampered with. Matched on exact component or file
- * name; `.env*` matches the `.env` family.
+ * name, using the same default policy as tools and shell execution.
  */
 export declare function isProtectedRelPath(rel: string): boolean;
 /**

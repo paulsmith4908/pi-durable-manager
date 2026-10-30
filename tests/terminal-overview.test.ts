@@ -39,6 +39,7 @@ function fixture() {
   const rpc: ObserverRpc = { async call<T>(method: string, params: any = {}): Promise<T> {
     calls.push({ method, params });
     if (method === 'workflow.status') { assert.equal(params.id, 'w'); return snapshot; }
+    if (method === 'workflow.assignments') return {workflowId:'w',roadmap:snapshot.workflow.roadmap,total:1,before:1,nextBefore:null,selected:id,assignments:[{...assignment,number:1}]} as T;
     if (method === 'assignments.show') throw Error('Viewer must not fetch unbounded evidence');
     if (method === 'projects.show') return { name: 'Example', path: '/example' } as T;
     if (method === 'activity.list') return { entries, nextCursor: 401 } as T;
@@ -202,7 +203,7 @@ test('Mac Chrome shows a plain progress log by default and keeps measurements op
  try{
   browser=await chromium.launch({executablePath:'/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',headless:true});
   const page=await browser.newPage({viewport:{width:500,height:900}}),errors:string[]=[];page.on('pageerror',(e:Error)=>errors.push(e.message));
-  await page.goto(app.url+'/?workflowId=w');await page.waitForFunction("document.getElementById('progress-now')?.textContent === 'Implement'");
+  await page.goto(app.url+'/?workflowId=w');await page.waitForFunction(()=>(globalThis as any).document.getElementById('progress-now')?.textContent === 'Implement');
   assert.equal(await page.locator('#progress-now').innerText(),'Implement');
   assert.equal(await page.getByRole('tab',{name:'Progress',exact:true}).isVisible(),true);
   assert.equal(await page.locator('#progress-roadmap li').count(),3);assert.equal(await page.locator('#progress-roadmap li[data-current=true]').innerText(),'→\nImplement\nIn progress');
@@ -212,6 +213,39 @@ test('Mac Chrome shows a plain progress log by default and keeps measurements op
   await page.getByText('Details and measurements',{exact:true}).click();
   f.assignment.state='blocked';f.snapshot.events=[{eventId:'q',kind:'manager_request',assignmentId:id,actionable:true,summary:'Should reload retain the count?'}];
   await page.locator('#waiting-list').getByText('Should reload retain the count?',{exact:true}).waitFor();assert.equal(await page.locator('#waiting-card').isVisible(),true);
-  await page.setViewportSize({width:390,height:850});assert.equal(await page.evaluate('document.documentElement.scrollWidth <= innerWidth'),true);assert.deepEqual(errors,[]);
+  await page.setViewportSize({width:390,height:850});assert.equal(await page.evaluate(()=>(globalThis as any).document.documentElement.scrollWidth <= (globalThis as any).innerWidth),true);assert.deepEqual(errors,[]);
  }finally{await browser?.close();await app.close();}
+});
+
+test('assignment history HTTP route uses bounded cursor reads and retains the live selection',async()=>{
+ const calls:any[]=[];
+ const rpc:ObserverRpc={async call<T>(method:string,p:any):Promise<T>{
+  calls.push({method,p});assert.equal(method,'workflow.assignments');
+  return {workflowId:'w',roadmap:'',total:120,before:p.before??120,nextBefore:80,selected:'live',assignments:[{id:'older',number:100,state:'accepted'}]} as T;
+ }};
+ const app=await startTerminalBrowser({rpc,stateDir:tmpdir()});try{
+  const r=await fetch(app.url+'/assignments?workflowId=w&history=1&before=100'),p=await r.json() as any;
+  assert.equal(r.status,200);assert.equal(p.selected,'live');assert.equal(p.nextBefore,80);assert.equal(p.assignments[0].title,'Assignment 100');
+  assert.deepEqual(calls,[{method:'workflow.assignments',p:{id:'w',before:100,limit:20}}]);
+ }finally{await app.close();}
+});
+
+test('recorded output pages and oversized entry chunks stay read-only and escape worker text',async()=>{
+ const calls:any[]=[];
+ const rpc:ObserverRpc={async call<T>(method:string,p:any={}):Promise<T>{
+  calls.push({method,p});
+  if(method==='assignments.list')return {assignments:[{id,projectId:'p',sessionId:'s',state:'accepted'}]} as T;
+  if(method==='sessions.transcript')return {entries:p.cursor?[{id:'3',kind:'message',data:'last'}]:[{id:'1',kind:'message',data:'<script>evil()</script>'},{id:'2',kind:'message',entryId:'2',truncated:true}],nextCursor:p.cursor?null:'cursor+/?=',truncated:false} as T;
+  if(method==='sessions.entry')return {offset:p.offset,chunk:'large </pre><script>bad()</script>',totalChars:90000,nextOffset:16384} as T;
+  throw Error('Unexpected method '+method);
+ }};
+ const app=await startTerminalBrowser({rpc,stateDir:tmpdir()});try{
+  const path=app.url+'/history?assignmentId='+id;
+  let r=await fetch(path),html=await r.text();assert.equal(r.status,200);assert.ok(html.includes('&lt;script&gt;evil()&lt;/script&gt;'));assert.ok(!html.includes('<script>'));assert.ok(html.includes('Read the full entry in chunks'));assert.ok(html.includes('Next page'));
+  r=await fetch(path+'&cursor='+encodeURIComponent('cursor+/?='));html=await r.text();assert.ok(html.includes('last'));assert.ok(!html.includes('Next page'));
+  r=await fetch(path+'&entryId=2&offset=0');html=await r.text();assert.ok(html.includes('Next chunk'));assert.ok(!html.includes('<script>'));assert.ok(html.includes('offset=16384'));
+  assert.ok(calls.filter(c=>c.method==='sessions.transcript').every(c=>c.p.limit===20));assert.ok(calls.filter(c=>c.method==='sessions.entry').every(c=>c.p.maxChars===16384&&c.p.id==='s'));
+  assert.equal((await fetch(path,{method:'POST'})).status,405);assert.equal((await fetch(path,{headers:{Origin:'https://other.invalid'}})).status,403);assert.equal((await fetch(path+'&entryId=-1')).status,400);
+  assert.ok(calls.every(c=>['assignments.list','sessions.transcript','sessions.entry'].includes(c.method)));
+ }finally{await app.close();}
 });

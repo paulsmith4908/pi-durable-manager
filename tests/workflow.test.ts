@@ -168,6 +168,13 @@ test('workflow review refuses stale checkout and never acknowledges failed accep
   await assert.rejects(f.call('workflow.review',p,'stale-review'),/changed|stale|match/i);
   assert.equal((await f.call('workflow.event',{eventId:e.eventId})).event.acked,false);
   assert.equal((await f.call('assignments.show',{id:a.assignment.id})).state,'needs_review');
+  assert.equal((await f.call('workflow.event',{eventId:e.eventId})).decision,null,'failed intent must not become an accept verdict');
+  await f.restart();
+  const revised=await f.call('workflow.review',{...p,decision:'revise',note:'Source changed; request correction'},'correct-stale-review');
+  assert.equal(revised.assignment.state,'revision_requested');
+  const handled=await f.call('workflow.event',{eventId:e.eventId});
+  assert.equal(handled.decision.action,'revise');assert.equal(handled.event.acked,true);
+  await assert.rejects(f.call('workflow.review',p,'stale-review'),/different state|verdict/);
  }finally{await f.close();}
 });
 test('operator pause drains current command without killing it, fences subsequent tools and resumes once',async()=>{
@@ -283,5 +290,63 @@ test('scorecard tracks real question/answer/revision continuation exactly once w
   await f.restart();const score=await f.call('scorecard.read',{id:f.task.id});
   assert.equal(score.codex.counts.product_decision,1);assert.equal(score.codex.counts.revision_guidance,1);assert.equal(score.codex.counts.review,1);assert.equal(score.codex.total,3);assert.equal(score.trends[0].assignments,3);assert.equal(score.trends[0].firstReview,false);assert.equal(score.scope.piPoints,3);assert.equal(score.assignments.unmapped,0);
   await f.call('workflow.finish',{id:f.task.id,note:'Fixture accepted'},'score-finish');
+ }finally{await f.close();}
+});
+
+test('review never applies a verdict conflicting with an existing manager decision', async () => {
+ const f=await fixture();try{
+  f.faux.appendResponses([fauxAssistantMessage('Done')]);
+  const a=(await f.call('workflow.submit',{id:f.task.id,task:'Finish',criteria:'Review'},'conflict-submit')).assignment;
+  await f.call('assignments.wait',{id:a.id,timeoutMs:8000});
+  const event=(await f.call('workflow.status',{id:f.task.id})).events[0],evidence=await f.call('assignments.evidence',{id:a.id});
+  await f.call('manager.decision',{eventId:event.eventId,action:'revise',note:'Previously requested changes'},'prior-decision');
+  await assert.rejects(f.call('workflow.review',{id:f.task.id,eventId:event.eventId,decision:'accept',note:'Accept instead',evidenceHash:evidence.sha256},'conflicting-review'),/different decision/);
+  assert.equal((await f.call('assignments.show',{id:a.id})).state,'needs_review');
+  assert.equal((await f.call('workflow.event',{eventId:event.eventId})).event.acked,false);
+ }finally{await f.close();}
+});
+
+test('review retries a failed activity write without duplicating the applied verdict', async () => {
+ const f=await fixture();try{
+  f.faux.appendResponses([fauxAssistantMessage('Done')]);
+  const a=(await f.call('workflow.submit',{id:f.task.id,task:'Finish',criteria:'Review'},'ledger-submit')).assignment;
+  await f.call('assignments.wait',{id:a.id,timeoutMs:8000});
+  const event=(await f.call('workflow.status',{id:f.task.id})).events[0],evidence=await f.call('assignments.evidence',{id:a.id});
+  const store=(f.service as any).metadata,original=store.appendActivity.bind(store);let fail=true;
+  store.appendActivity=(entry:any)=>{if(entry.kind==='codex.activity'&&fail){fail=false;throw Error('simulated activity failure')}return original(entry)};
+  const p={id:f.task.id,eventId:event.eventId,decision:'accept',note:'Reviewed evidence',evidenceHash:evidence.sha256};
+  await assert.rejects(f.call('workflow.review',p,'ledger-review'),/activity failure/);
+  const timestamp=(await f.call('assignments.show',{id:a.id})).reviewedAt;
+  assert.equal((await f.call('workflow.event',{eventId:event.eventId})).event.acked,false);
+  await f.call('workflow.review',p,'ledger-review');
+  assert.equal((await f.call('assignments.show',{id:a.id})).reviewedAt,timestamp);
+  assert.equal((await f.call('workflow.event',{eventId:event.eventId})).event.acked,true);
+  const ledger=await f.call('scorecard.ledger',{id:f.task.id});assert.equal(ledger.entries.filter((e:any)=>e.id===`event:${event.eventId}`).length,1);
+ }finally{await f.close();}
+});
+
+test('assignment history pages beyond 20 entries without scanning all assignment records', async () => {
+ const f=await fixture();try{
+  f.faux.appendResponses([fauxAssistantMessage('Done')]);
+  const job=(await f.call('workflow.submit',{id:f.task.id,task:'Finish',criteria:'Review'},'history-seed')).assignment;
+  await f.call('assignments.wait',{id:job.id,timeoutMs:8000});
+  const store=(f.service as any).metadata,base=store.getAssignment(job.id),task=store.getControl(`workflow:${f.task.id}`);
+  for(let i=1;i<125;i++){
+    const id=`pdm-a-${randomUUID()}`,requestId=`history-${i}`;
+    store.insertAssignment({...base,id,requestId,state:'accepted',leasePath:null,evidence:'x'.repeat(8000),createdAt:base.createdAt+i});
+    task.assignments.push(id);task.submissions.push(requestId);
+  }
+  store.setWorkflowControl(`workflow:${task.id}`,task);
+  const original=store.listAssignments.bind(store);store.listAssignments=()=>{throw Error('unbounded record scan')};
+  let before:number|undefined,seen:string[]=[],pages=0;
+  do{
+    const page=await f.call('workflow.assignments',{id:task.id,...(before===undefined?{}:{before}),limit:20});
+    assert.ok(page.assignments.length<=20);assert.ok(JSON.stringify(page).length<16000);assert.equal(page.total,125);
+    assert.equal(page.selected,task.assignments.at(-1));seen.push(...page.assignments.map((a:any)=>a.id));before=page.nextBefore??undefined;assert.ok(++pages<10);
+  }while(before!==undefined);
+  assert.deepEqual(seen,[...task.assignments].reverse());assert.equal(pages,7);
+  await assert.rejects(f.call('workflow.assignments',{id:task.id,before:-1}),/cursor/);
+  await assert.rejects(f.call('workflow.assignments',{id:task.id,limit:51}),/cursor/);
+  store.listAssignments=original;
  }finally{await f.close();}
 });

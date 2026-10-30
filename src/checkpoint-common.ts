@@ -1,3 +1,4 @@
+import { isProtectedRelativePath } from "./path-protection.js";
 // integration/checkpoint-common.ts — shared types, layout, path/id safety.
 // Layout: <privateDir>/<id>/{manifest.json, files/<rel>} (0700 dir, 0600 files).
 
@@ -189,17 +190,10 @@ const SHA256_RE = /^[0-9a-f]{64}$/;
 /**
  * Credential/config path segments that must never appear in a manifest entry,
  * even if the manifest was tampered with. Matched on exact component or file
- * name; `.env*` matches the `.env` family.
+ * name, using the same default policy as tools and shell execution.
  */
 export function isProtectedRelPath(rel: string): boolean {
-  const parts = rel.split("/").filter((p) => p.length > 0 && p !== ".");
-  const banned = new Set([".git", ".secrets", ".runtime"]);
-  for (const p of parts) {
-    if (banned.has(p)) return true;
-    if (p === "config.local.json") return true;
-    if (p === ".env" || p.startsWith(".env.")) return true;
-  }
-  return false;
+  return isProtectedRelativePath(rel);
 }
 
 function bad(msg: string): never {

@@ -13,11 +13,10 @@
  * model-supplied working directory: callers pass a per-project closure root.
  */
 import { type ChildProcess } from "node:child_process";
+export { PROTECTED_NAMES } from "./path-protection.js";
 import { lstat } from "node:fs/promises";
 /** Absolute path to the macOS sandbox launcher. */
 export declare const SANDBOX_EXEC = "/usr/bin/sandbox-exec";
-/** Protected file/directory names that are never read or written through tools. */
-export declare const PROTECTED_NAMES: readonly [".git", ".secrets", ".runtime", "config.local.json"];
 /** Structured, model-visible error codes returned instead of throwing to the service. */
 export type ToolErrorCode = "outside_root" | "protected_path" | "not_found" | "not_a_file" | "is_directory" | "ambiguous_match" | "no_match" | "too_large" | "invalid_argument" | "sandbox_unavailable" | "spawn_error" | "timeout" | "aborted";
 /** Error carrying a machine-readable code; tools convert it to a model-visible result. */

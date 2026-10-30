@@ -5,7 +5,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { Container, Text, ScrollView, VStack, TuiAltScreen, ProcessTerminal, matchesKey, truncateToWidth, KeybindingsManager, setKeybindings, TUI_KEYBINDINGS } from '@earendil-works/pi-tui';
 import { PiClient } from './client.js';
-export const OBSERVER_METHODS = new Set(['service.capabilities', 'service.status', 'projects.show', 'assignments.list', 'activity.list', 'supervision.status', 'manager.status', 'workflow.status', 'scorecard.read']);
+export const OBSERVER_METHODS = new Set(['service.capabilities', 'service.status', 'projects.show', 'assignments.list', 'activity.list', 'supervision.status', 'manager.status', 'workflow.status', 'workflow.assignments', 'sessions.model', 'sessions.transcript', 'sessions.entry', 'scorecard.read']);
 export function readOnlyRpc(rpc) {
     return { async call(method, params = {}) {
             if (!OBSERVER_METHODS.has(method))
@@ -212,7 +212,7 @@ export class PiWorkerDisplay {
         if (this.seen.size > 2000)
             this.seen = new Set([...this.seen].slice(-1000));
     }
-    updateStatus(service, assignment, checks, manager, guard) {
+    updateStatus(service, assignment, checks, manager, guard, sessionModel = null) {
         this.state = terminalText(assignment.state ?? 'unknown');
         const check = checks.snapshots?.find((s) => s.assignmentId === this.assignment.id);
         const phase = check?.nextCheckAt ? terminalText(check.phase) : this.state;
@@ -220,7 +220,7 @@ export class PiWorkerDisplay {
         const next = check?.nextCheckAt ? new Date(check.nextCheckAt).toLocaleTimeString() : 'none';
         this.footer.setText(this.ui.theme.fg('dim', [
             terminalText(this.project.path),
-            terminalText(service.model),
+            sessionModel?.model?.modelId ? terminalText([sessionModel.providerName, sessionModel.profileName, sessionModel.model.modelId].filter(Boolean).join(' · ')) : 'Session model unavailable',
             `guard ${guardPhase} · ${phase} · daemon ${service.pid}`,
             `next check ${next} · wakes ${manager.pending ?? '?'} pending / ${manager.unacked ?? '?'} unacked · journal #${this.lastSeq}`,
             'Read-only · PgUp/PgDn scroll · Ctrl+O tool output · prompts go through Codex',
@@ -285,6 +285,12 @@ export async function observeWorker(options) {
     });
     // Start near this assignment's latest recorded activity, not at the start of
     // a multi-day project's journal. The full journal is retained by the service.
+    let sessionModel = null;
+    if (caps.methods.includes('sessions.model'))
+        try {
+            sessionModel = await rpc.call('sessions.model', { id: assignment.sessionId });
+        }
+        catch { /* Do not guess from daemon defaults. */ }
     const initialChecks = await rpc.call('supervision.status', { projectId: assignment.projectId });
     let cursor = recentActivityCursor(initialChecks, assignment.id);
     try {
@@ -308,7 +314,7 @@ export async function observeWorker(options) {
                     guard = JSON.parse(await readFile(join(options.stateDir, 'runtime-guard-status.json'), 'utf8'));
                 }
                 catch { /* An absent guard is displayed honestly. */ }
-                display.updateStatus(service, list.assignments.find((a) => a.id === assignment.id) ?? { state: 'unknown' }, checks, manager, guard);
+                display.updateStatus(service, list.assignments.find((a) => a.id === assignment.id) ?? { state: 'unknown' }, checks, manager, guard, sessionModel);
             }
             catch (error) {
                 display.error(observerError(error).message);

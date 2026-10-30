@@ -1,4 +1,10 @@
-const token = location.hash.slice(1);
+// Browser-tab storage survives refresh but never crosses this loopback origin/port.
+const providedToken = location.hash.slice(1);
+let token = /^[a-f0-9]{64}$/.test(providedToken) ? providedToken : "";
+try {
+  if (token) sessionStorage.setItem("pi-setup-token", token);
+  else token = sessionStorage.getItem("pi-setup-token") || "";
+} catch { /* Initial private link still works when storage is unavailable. */ }
 history.replaceState(null, "", "/");
 const $ = id => document.getElementById(id);
 const form = $("setup");
@@ -19,11 +25,12 @@ async function status() {
     const state = await api("status");
     $("status").textContent = state.message;
     disable(["installing", "done", "existing"].includes(state.phase));
+    if (state.phase === "installing" && !polling) polling = setInterval(status, 1500);
     if (state.phase === "done") {
-      $("details").textContent = `Version ${state.installation.version}\nService health: verified\nNo coding request has been sent to your provider yet.`;
-      clearInterval(polling);
-    } else if (state.phase === "failed" || state.phase === "existing") clearInterval(polling);
-  } catch (error) { $("status").textContent = error.message; clearInterval(polling); }
+      $("details").textContent = `Version ${state.installation.version}\nService health: verified\nProvider tool calling: not verified\nCoding and GUI wake: not verified\nReturn to Codex to test the selected model before starting work.`;
+      clearInterval(polling); polling = undefined;
+    } else if (state.phase === "failed" || state.phase === "existing") { clearInterval(polling); polling = undefined; }
+  } catch (error) { $("status").textContent = error.message; clearInterval(polling); polling = undefined; }
 }
 $("discover").addEventListener("click", async () => {
   $("discover").disabled = true;
@@ -38,12 +45,15 @@ $("discover").addEventListener("click", async () => {
 form.addEventListener("submit", async event => {
   event.preventDefault(); disable(true);
   try {
-    await api("install", { endpoint: $("endpoint").value, allowInsecureHttp: $("insecure").checked, key: $("key").value, contextWindow: Number($("contextWindow").value), maxTokens:Number($("maxTokens").value), reasoning:$("reasoning").checked, model: $("model").value, noAuth: $("noAuth").checked, allowNetwork: $("network").checked });
+    await api("install", { endpoint: $("endpoint").value, allowInsecureHttp: $("insecure").checked, key: $("key").value, contextWindow: Number($("contextWindow").value), maxTokens:Number($("maxTokens").value), reasoning:$("reasoning").checked, model: $("model").value, noAuth: $("noAuth").checked, allowNetwork: $("network").checked, permissions: {writeFiles: $("writeFiles").checked, shell: $("shell").checked, network: $("network").checked, hostValidation: $("hostValidation").checked, excludedPaths: []} });
     $("key").value = "";
     $("status").textContent = "Installing Pi Durable. Keep this page open…";
-    polling = setInterval(status, 1500);
+    if (!polling) polling = setInterval(status, 1500);
     await status();
   } catch (error) { $("status").textContent = error.message; disable(false); }
 });
 if (!token) { disable(true); $("status").textContent = "Open the private setup link provided by Codex."; }
 else await status();
+
+$("writeFiles").onchange=()=>{if(!$("writeFiles").checked)$("shell").checked=false;};
+$("shell").onchange=()=>{if($("shell").checked)$("writeFiles").checked=true;};

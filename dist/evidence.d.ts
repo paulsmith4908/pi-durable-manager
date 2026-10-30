@@ -8,7 +8,7 @@ export declare const DEFAULT_MAX_FILE_BYTES: number;
 /** Credential/state files that must never be hashed or copied. */
 export declare const PROTECTED_FILES: readonly string[];
 /** Directory names (anywhere in the tree) that are never read. */
-export declare const PROTECTED_NAMES: readonly string[];
+export { PROTECTED_NAMES } from "./path-protection.js";
 export interface SnapshotFileEntry {
     sha256: string;
     size: number;

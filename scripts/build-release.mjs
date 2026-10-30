@@ -20,6 +20,7 @@
  */
 
 import { execFileSync } from "node:child_process";
+import { runtimeLock } from "./runtime-lock.mjs";
 import {
   cpSync,
   existsSync,
@@ -60,6 +61,7 @@ const SOURCE_TOP = [
 const SOURCE_DIRS = ["src", "tests", "tests-assets", "scripts", "skill", "plugin", "example", "docs", "bin", "vendor"];
 // Individual files under dirs we do NOT copy wholesale (avoids scratch dirs).
 const SOURCE_FILES = [
+  ".github/workflows/quality.yml",
   "tools/sandbox-diagnostic.mjs",
   "tools/verify-scratch.mjs",
   "tools/monitor.mjs",
@@ -68,6 +70,7 @@ const SOURCE_FILES = [
 ];
 // Files/dirs never allowed into ANY archive, even if something above matches.
 const FORBIDDEN = [
+  /[.](orig|rej)$/i,
   /(^|\/)node_modules(\/|$)/,
   /(^|\/)\.git(\/|$)/,
   /(^|\/)\.runtime(\/|$)/,
@@ -343,8 +346,14 @@ function stagePlugin(destRoot) {
   const payloadName = `pi-durable-manager-${VERSION}.tgz`;
   const payload = path.join(ARTIFACTS, payloadName);
   cpSync(payload, path.join(serviceDir, payloadName));
+  const graph = runtimeLock(JSON.parse(readFileSync(path.join(ROOT, "package-lock.json"), "utf8")),
+    JSON.parse(readFileSync(path.join(ROOT, "package.json"), "utf8")), payloadName, readFileSync(payload));
+  writeFileSync(path.join(serviceDir, "runtime-package.json"), JSON.stringify(graph.pkg, null, 2) + "\n");
+  writeFileSync(path.join(serviceDir, "runtime-lock.json"), JSON.stringify(graph.lock, null, 2) + "\n");
   writeFileSync(path.join(serviceDir, "runtime.json"), JSON.stringify({
-    schemaVersion: 1, version: VERSION, file: payloadName, sha256: sha256File(payload),
+    schemaVersion: 2, version: VERSION, file: payloadName, sha256: sha256File(payload),
+    packageFile: "runtime-package.json", packageSha256: sha256File(path.join(serviceDir, "runtime-package.json")),
+    lockFile: "runtime-lock.json", lockSha256: sha256File(path.join(serviceDir, "runtime-lock.json")),
   }, null, 2) + "\n");
 }
 

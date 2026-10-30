@@ -1,1 +1,1 @@
-{"version":3,"file":"worker-instructions.d.ts","sourceRoot":"","sources":["../src/worker-instructions.ts"],"names":[],"mappings":"AAAA,sFAAsF;AACtF,eAAO,MAAM,gBAAgB,s7BAWT,CAAC;AAErB,wFAAwF;AACxF,wBAAgB,gBAAgB,CAAC,YAAY,EAAE,MAAM,GAAG,MAAM,CAE7D"}
+{"version":3,"file":"worker-instructions.d.ts","sourceRoot":"","sources":["../src/worker-instructions.ts"],"names":[],"mappings":"AAAA,OAAO,KAAK,EAAE,kBAAkB,EAAE,MAAM,kBAAkB,CAAC;AAE3D,sFAAsF;AACtF,eAAO,MAAM,gBAAgB,ooCAYT,CAAC;AAErB,wFAAwF;AACxF,wBAAgB,gBAAgB,CAAC,YAAY,EAAE,MAAM,EAAE,WAAW,CAAC,EAAE,kBAAkB,GAAG,MAAM,CAE/F"}

@@ -8,9 +8,9 @@ The role receiving an instruction matters more than the file's topic.
 | Plugin `SKILL.md` and references | Codex managing a selected Pi task | Delegation, questions, review, wake/recovery protocol |
 | `src/worker-instructions.ts` | Pi worker agent only | Assigned code/tests; no independent commit/tag/push/publish/deploy or onward delegation |
 
-`src/codex-repo-guidance.ts` supplies the new-project template. It must match
-`AGENTS.md` and `docs/AGENTS-PI-TEMPLATE.md`; tests catch drift. Projects imported
-from elsewhere keep their own AGENTS.md unchanged.
+Project creation no longer writes AGENTS.md. The retained repository-guidance template
+is an optional reference, never an automatic setup step. Existing files are preserved.
+Permission authority lives in private service state, not the writable checkout.
 
 `withWorkerPolicy` supplies worker-only instructions on assignment admission,
 continuation and custom session configuration. Reading a worker policy or

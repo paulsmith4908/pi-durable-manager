@@ -39,6 +39,17 @@ export const SETTINGS_PANEL = `<style>
 <div class="setting-row" id="project-model-row"><label for="model-project">This project</label><div class="setting-control"><select id="model-project"></select><button id="save-project">Save choice</button></div><p id="project-model-description">Applies to future sessions. Work already started keeps its model.</p><p id="project-change-note" hidden>Review or stop active work first. Future worker context will be sent to the selected provider.</p></div>
 </section>
 <section class="settings-section"><h2>Saved models</h2><div id="model-list"></div></section>
+<details class="settings-section" id="worker-permissions"><summary>Worker permissions</summary>
+<p>These controls are enforced by Pi. Changing permissions requires affected work to be stopped and joined first. No repository instructions are created.</p>
+<label>Apply to<select id="permission-scope"><option value="project">This project</option><option value="default">Default for projects without an override</option></select></label>
+<form id="permissions-form">
+<label class="check-label"><input id="permission-write" type="checkbox">Allow file editing in this checkout</label>
+<label class="check-label"><input id="permission-shell" type="checkbox">Allow shell commands (requires file editing)</label>
+<label class="check-label"><input id="permission-network" type="checkbox">Allow development networking for shell commands</label>
+<label class="check-label"><input id="permission-validation" type="checkbox">Allow configured browser validation profiles</label>
+<label>Additional excluded files or directories<textarea id="permission-exclusions" rows="3" placeholder="private-data&#10;credentials.json"></textarea></label>
+<p>One literal project-relative path per line. Common secret files, Git metadata and manager state remain protected. Shell plus networking grants broad execution access; it does not grant permission to publish, use credentials or change Pi settings.</p>
+<p id="permission-source"></p><button type="submit">Save permissions</button></form></details>
 <details class="add-model" id="add-model"><summary>Add a model</summary><div class="add-body">
 <details class="provider-details" id="add-provider"><summary>Connect a new provider</summary>
 <form id="connection-form"><label>Provider name<input name="name" required maxlength="100" placeholder="e.g. Mac Studio or Modal"></label><label>API base URL<input name="endpoint" type="url" required placeholder="http://127.0.0.1:8080/v1"></label>
@@ -51,29 +62,43 @@ export const SETTINGS_PANEL = `<style>
 <div><div class="field-pair"><label>Context window<input name="contextWindow" type="number" min="1" max="10000000" required placeholder="Tokens"></label><label>Maximum output<input name="maxTokens" type="number" min="1" max="10000000" required placeholder="Tokens"></label></div><p>Use the token limits configured on your model server.</p></div>
 <details class="advanced"><summary>Advanced compatibility</summary><label class="check-label"><input name="reasoning" type="checkbox">Reasoning model</label><label>Compatibility overrides (JSON)<textarea name="compat" rows="4">{}</textarea></label></details>
 <button type="submit">Save model</button></form></div></details>
-<details class="advanced"><summary>How model settings work</summary><p>Start your OpenAI-compatible model server before connecting. Changing the default affects new projects only. Existing sessions keep their model, with no automatic fallback.</p><p>To change a saved endpoint, key or model configuration, add a replacement and select it for future work. Keys stay in private local files.</p></details>
+<details class="advanced"><summary>How model settings work</summary><p>Start your OpenAI-compatible model server before connecting. Changing the default affects new projects only. Existing sessions keep their model, with no automatic fallback.</p><p>Add a replacement to change endpoints or model configuration. Added providers support key rotation and revocation under Model details. The original configured connection is preserved; replace it explicitly rather than modifying its external credential. Keys stay in private local files.</p></details>
 </div></section>`;
 export const SETTINGS_SCRIPT = `<script>
 (()=>{
-let csrf='',projectId=null,loaded=false,busy=false,savedDefault='',savedProject='';
+let csrf='',projectId=null,loaded=false,busy=false,savedDefault='',savedProject='',permissions=null;
 const el=id=>document.getElementById(id);
 const message=(s,error=false)=>{el('settings-message').textContent=s;el('settings-message').dataset.error=String(error);};
-async function api(action,input){const r=await fetch('/settings'+(input===undefined?'?'+new URLSearchParams({workflowId:new URL(location.href).searchParams.get('workflowId')||''}):''),{method:input===undefined?'GET':'POST',headers:input===undefined?{}:{'Content-Type':'application/json','X-Pi-Settings':csrf},...(input===undefined?{}:{body:JSON.stringify({action,params:input})})});const d=await r.json();if(!r.ok)throw Error(d.error||'Settings request failed');return d;}
+async function api(action,input){const r=await fetch('/settings'+(input===undefined?'?'+new URLSearchParams({workflowId:new URL(location.href).searchParams.get('workflowId')||''}):''),{method:input===undefined?'GET':'POST',headers:{Authorization:window.piOperatorAuthorization?.()||'',...(input===undefined?{}:{'Content-Type':'application/json','X-Pi-Settings':csrf})},...(input===undefined?{}:{body:JSON.stringify({action,params:input})})});const d=await r.json();if(!r.ok)throw Error(d.error||'Settings request failed');return d;}
 function option(id,label){const o=document.createElement('option');o.value=id;o.textContent=label;return o;}
 function text(tag,value,cls){const e=document.createElement(tag);e.textContent=value;if(cls)e.className=cls;return e;}
 function choices(){el('save-default').disabled=busy||el('model-default').value===savedDefault;el('save-project').disabled=busy||el('model-project').value===savedProject;el('project-change-note').hidden=el('model-project').value===savedProject;}
 async function load(){
  const d=await api();csrf=d.csrf;projectId=d.projectId;loaded=true;savedDefault=d.defaultProfileId;savedProject=d.projectProfileId||'';
+ permissions=d.permissions;el('permission-scope').options[0].disabled=!projectId;if(!projectId)el('permission-scope').value='default';renderPermissions();
  const connections=new Map(d.connections.map(c=>[c.id,c]));
- for(const id of ['model-default','model-project']){const select=el(id);select.replaceChildren(...d.profiles.map(p=>option(p.id,p.name+' · '+connections.get(p.connectionId).name)));select.value=id==='model-default'?savedDefault:savedProject;}
+ for(const id of ['model-default','model-project']){const select=el(id);select.replaceChildren(...d.profiles.map(p=>option(p.id,p.name+' · '+connections.get(p.connectionId).name+(connections.get(p.connectionId).disabled?' · disabled':''))));select.value=id==='model-default'?savedDefault:savedProject;}
+ if(d.credentialCleanupPending)message('Credential cleanup is pending. Restart the service to retry, or ask Codex to inspect private file permissions.',true);
  const previous=el('profile-connection').value;el('profile-connection').replaceChildren(...d.connections.map(c=>option(c.id,c.name+(c.available?'':' · unavailable'))));if(connections.has(previous))el('profile-connection').value=previous;
  el('project-model-row').hidden=!projectId;
  const list=el('model-list');list.replaceChildren();
  for(const p of d.profiles){
   const c=connections.get(p.connectionId),row=text('div','','model-item'),head=text('div','','model-heading'),info=text('div',''),button=text('button','Test connection','quiet-button');
-  info.append(text('div',p.name,'model-name'),text('div',c.name+' · '+(p.lastTest?(p.lastTest.ok?'Test passed':'Test failed'):'Not tested'),'model-meta'));
+  info.append(text('div',p.name,'model-name'),text('div',c.name+' · '+(c.disabled?'Disabled':p.lastTest?(p.lastTest.ok?'Test passed':'Test failed'):'Not tested'),'model-meta'));
   button.onclick=()=>act(async()=>{message('Testing '+p.name+'…');const r=await api('test',{profileId:p.id});await load();message(r.detail,!r.ok);});head.append(info,button);
   const detail=text('details','','model-detail');detail.append(text('summary','Model details'),text('p','Model ID: '+p.model),text('p','Endpoint: '+c.endpoint),text('p',p.contextWindow.toLocaleString()+' context tokens · '+p.maxTokens.toLocaleString()+' output tokens'));
+  if(!c.disabled){
+    const renameInput=document.createElement('input');renameInput.value=c.name;renameInput.setAttribute('aria-label','Provider name');
+    const rename=text('button','Rename provider');rename.onclick=()=>act(async()=>{await api('connection.rename',{connectionId:c.id,name:renameInput.value,requestId:id()});await load();message('Provider name saved.');});detail.append(renameInput,rename);
+  }
+  if(!c.legacy&&!c.disabled){
+    const access=text('details','','advanced');access.append(text('summary','Provider credentials and revocation'));
+    const input=document.createElement('input');input.type='password';input.autocomplete='off';input.placeholder='New API key';input.setAttribute('aria-label','New API key');
+    const noAuth=document.createElement('input');noAuth.type='checkbox';const label=text('label','No authentication');label.prepend(noAuth);
+    const rotate=text('button','Replace saved key');rotate.onclick=()=>act(async()=>{await api('connection.rotate',{connectionId:c.id,apiKey:input.value,noAuth:noAuth.checked,requestId:id()});input.value='';await load();message('Credential rotated. Old-key cleanup is queued for retry if needed. Test the new credential before use.');});
+    const disable=text('button','Disable provider and remove its key');disable.onclick=()=>act(async()=>{await api('connection.disable',{connectionId:c.id,requestId:id()});await load();message('Provider disabled. Pinned projects need an explicit replacement; no fallback occurs.');});
+    access.append(text('p','Stop work using this provider first. To disable it, select a different default. Revocation blocks future use and deletes its owned saved key.'),input,label,rotate,disable);detail.append(access);
+  }else if(c.disabled)detail.append(text('p','Provider disabled. Choose a replacement explicitly.'));
   row.append(head,detail);list.append(row);
  }
  if(!d.profiles.length){list.append(text('p','No models yet. Add one below.'));el('add-model').open=true;}
@@ -82,6 +107,12 @@ async function load(){
 }
 async function act(fn){if(busy)return;busy=true;for(const b of el('settings-panel').querySelectorAll('button'))b.disabled=true;try{await fn();}catch(e){message(e.message,true);}finally{busy=false;for(const b of el('settings-panel').querySelectorAll('button'))b.disabled=false;choices();}}
 function id(){return crypto.randomUUID();}
+function renderPermissions(){if(!permissions)return;const d=el('permission-scope').value==='default'?permissions.default:permissions,p=d.policy;el('permission-write').checked=p.writeFiles;el('permission-shell').checked=p.shell;el('permission-network').checked=p.network;el('permission-validation').checked=p.hostValidation;el('permission-exclusions').value=p.excludedPaths.join('\\n');el('permission-source').textContent='Source: '+d.source+' · revision '+d.revision.slice(0,12);}
+el('permission-scope').onchange=renderPermissions;
+el('permission-write').onchange=()=>{if(!el('permission-write').checked)el('permission-shell').checked=false;};
+el('permission-shell').onchange=()=>{if(el('permission-shell').checked)el('permission-write').checked=true;};
+el('permissions-form').onsubmit=e=>{e.preventDefault();act(async()=>{const isDefault=el('permission-scope').value==='default',d=isDefault?permissions.default:permissions;await api('permissions.set',{...(isDefault?{}:{projectId}),expectedRevision:d.revision,policy:{writeFiles:el('permission-write').checked,shell:el('permission-shell').checked,network:el('permission-network').checked,hostValidation:el('permission-validation').checked,excludedPaths:el('permission-exclusions').value.split(/\\r?\\n/).map(s=>s.trim()).filter(Boolean)},requestId:id()});await load();message('Permissions saved. The service records this policy on new assignments.');});};
+
 document.addEventListener('pi-settings-open',()=>{if(!loaded)act(load);});el('settings-refresh').onclick=()=>act(async()=>{await load();message('Settings refreshed.');});
 el('model-default').onchange=choices;el('model-project').onchange=choices;
 el('save-default').onclick=()=>act(async()=>{await api('default',{profileId:el('model-default').value,requestId:id()});message('Default saved. Existing projects keep their model.');await load();});

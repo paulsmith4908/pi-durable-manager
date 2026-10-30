@@ -32,7 +32,7 @@ For a repository already hosted on GitHub, use its **actual** URL and the select
 release tag or commit, not a placeholder:
 
 ```sh
-codex plugin marketplace add https://github.com/paulsmith4908/pi-durable-manager.git --ref v0.7.0-beta.2
+codex plugin marketplace add https://github.com/paulsmith4908/pi-durable-manager.git --ref v0.7.0-beta.3
 ```
 
 Registering a source is not installation. In the desktop app, the user opens the
@@ -56,7 +56,7 @@ Open the returned loopback setup page beside the chat. The user supplies:
 1. Chat Completions API base URL and exact model ID.
 2. Server context window and maximum output tokens (do not guess them).
 3. API key privately in the page, or the no-auth choice.
-4. Whether workers may use development networking.
+4. Worker permissions: editing, shell commands, development networking, and configured host validation. Review the choices before saving; excluded paths can be added later in Settings.
 
 Keep the server running. Setup installs private runtime dependencies, writes local
 configuration, and starts the service. It does not provision the inference server.
@@ -85,10 +85,29 @@ workflow instead of launching a surprise test worker.
 
 Prefer a pinned release tag/commit. A marketplace refresh updates the plugin
 source; it is not proof the desktop cached plugin or private runtime updated.
-Check all versions before claiming an upgrade. This beta has no unattended runtime
-migration: finish or safely pause/checkpoint work, preserve state/config/credentials,
-and perform a deliberate compatible runtime upgrade. Never replace a running
-runtime or reset configuration just to install a new plugin.
+Check all versions before claiming an upgrade. Updates are explicit:
+
+1. Resolve any active/paused work and in-doubt command receipts. Stop the idle service
+   through the existing installed client. A paused worker holding a lease is not idle.
+2. From the **new installed plugin**, run:
+   `node skills/pi-durable-manager/scripts/maintenance.mjs inspect`.
+3. Run the same script with `upgrade`. It installs the checksum-verified runtime using
+   the included dependency lock, backs up private state and switches the installation
+   pointer. It refuses live services, writer leases and incompatible database schemas.
+4. Reconnect with the plugin, then verify the service version, selected model and
+   effective permissions before delegating.
+
+Use `repair` for a missing runtime or provably abandoned install lock. Use `rollback`
+with the service stopped to select the recorded previous runtime **only when its
+schema is compatible**. Rollback preserves current project/state data; it never
+restores an old database over newer work. `--data-home /absolute/path` selects a
+nondefault plugin installation. Legacy development layouts require a deliberate
+operator migration and are not silently moved by these commands.
+
+See [maintenance details](docs/MAINTENANCE.md). These operations preserve model settings
+and credentials and require no credential contents in chat. Existing repository
+AGENTS.md files remain untouched; review or remove any old generated guidance only
+when the repository owner requests it.
 
 For removal, use the desktop plugin uninstall flow and, when desired,
 `codex plugin marketplace remove pi-durable-beta`. These do not necessarily stop

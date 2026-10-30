@@ -14,7 +14,7 @@ import { serviceCompatCheck, type ServiceIdentity } from "../src/check.js";
 const EXPECTED = {
   configPath: "/etc/pi/config.json",
   stateDir: "/var/pi/state",
-  packageVersion: "0.7.0-beta.2",
+  packageVersion: "0.7.0-beta.3",
   model: "modal-latest",
 };
 
@@ -24,7 +24,7 @@ function compatible(): ServiceIdentity {
     configFile: "/etc/pi/config.json",
     stateDir: "/var/pi/state",
     protocolVersion: 1,
-    packageVersion: "0.7.0-beta.2",
+    packageVersion: "0.7.0-beta.3",
     providerId: "modal",
     model: "modal-latest",
   };
@@ -42,7 +42,7 @@ test("serviceCompatCheck: a same-protocol OLD package (0.2.0) is REJECTED", () =
   assert.equal(r.compatible, false, "0.2.0 service must be rejected");
   assert.equal(r.sameProtocol, true, "protocol alone still matches");
   assert.equal(r.samePackageVersion, false);
-  assert.match(r.reasons.join(" "), /package version 0\.2\.0 ≠ 0\.7\.0-beta\.2/);
+  assert.match(r.reasons.join(" "), /package version 0\.2\.0 ≠ 0\.7\.0-beta\.3/);
 });
 
 test("serviceCompatCheck: a missing packageVersion is a mismatch (not 'unknown so fine')", () => {

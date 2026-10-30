@@ -1,0 +1,8 @@
+{
+  "name": "pi-durable-private-runtime",
+  "version": "0.7.0-beta.3",
+  "private": true,
+  "dependencies": {
+    "pi-durable-manager": "file:pi-durable-manager-0.7.0-beta.3.tgz"
+  }
+}

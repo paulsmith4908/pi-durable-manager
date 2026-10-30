@@ -1012,7 +1012,7 @@ export async function runOfflineCheck(options) {
         if (workspace !== undefined) {
             return await finishOffline(steps, workspace, shortSocketDir);
         }
-        return summarize("0.7.0-beta.2", "offline", steps, {});
+        return summarize("0.7.0-beta.3", "offline", steps, {});
     }
 }
 /** Remove the verified workspace and record the cleanup step. */
@@ -1025,7 +1025,7 @@ async function finishOffline(steps, workspace, shortSocketDir) {
             status: "FAIL",
             detail: `refusing to remove unverified path ${real}`,
         });
-        return summarize("0.7.0-beta.2", "offline", steps, { workspace: real });
+        return summarize("0.7.0-beta.3", "offline", steps, { workspace: real });
     }
     await rm(real, { recursive: true, force: true });
     // Remove the short socket dir only if it is a canonical
@@ -1053,7 +1053,7 @@ async function finishOffline(steps, workspace, shortSocketDir) {
         status: clean ? "PASS" : "FAIL",
         detail: clean ? "temporary workspace removed" : "temporary files still present",
     });
-    return summarize("0.7.0-beta.2", "offline", steps, { workspace: real });
+    return summarize("0.7.0-beta.3", "offline", steps, { workspace: real });
 }
 /**
  * The FULL service-identity comparison the online check performs BEFORE any
@@ -1141,7 +1141,7 @@ export async function runOnlineCheck(options) {
         detail: start.ok === true ? `listening at ${socketPath}` : `start failed: ${start.code ?? "unknown"}`,
     });
     if (start.ok !== true)
-        return summarize("0.7.0-beta.2", "online", steps, { threadId: options.threadId });
+        return summarize("0.7.0-beta.3", "online", steps, { threadId: options.threadId });
     // A fresh, unique run id keeps every id/path distinct across invocations.
     const runId = randomUUID();
     const runFile = options.runFile ?? join(stateDir, "online-check-runs", `${runId}.json`);
@@ -1191,7 +1191,7 @@ export async function runOnlineCheck(options) {
             detail: `refusing to mutate anything: ${redactString(error.message)}`,
         });
         run.status = "receipt_not_persisted";
-        return summarize("0.7.0-beta.2", "online", steps, { threadId: options.threadId, runFile });
+        return summarize("0.7.0-beta.3", "online", steps, { threadId: options.threadId, runFile });
     }
     // From here on the run is durably journalled. A later persist failure is NOT
     // fatal to the run's identity: the ids are already recorded, so we surface it
@@ -1260,7 +1260,7 @@ export async function runOnlineCheck(options) {
                         stateDir: status?.stateDir ?? null,
                     };
                     await persistRunSafe(runFile, run, persistState, runFs);
-                    return summarize("0.7.0-beta.2", "online", steps, { threadId: options.threadId, runFile });
+                    return summarize("0.7.0-beta.3", "online", steps, { threadId: options.threadId, runFile });
                 }
             }
             catch (error) {
@@ -1273,7 +1273,7 @@ export async function runOnlineCheck(options) {
                     status: "FAIL",
                     detail: `could not read service status: ${redactString(error.message)}`,
                 });
-                return summarize("0.7.0-beta.2", "online", steps, { threadId: options.threadId, runFile });
+                return summarize("0.7.0-beta.3", "online", steps, { threadId: options.threadId, runFile });
             }
             void compatFailed;
             // 2. A UNIQUE, dedicated project directory (no fixed global path).
@@ -1302,7 +1302,7 @@ export async function runOnlineCheck(options) {
             if (projectId === undefined) {
                 run.status = "project_failed";
                 await persistRunSafe(runFile, run, persistState, runFs);
-                return summarize("0.7.0-beta.2", "online", steps, { threadId: options.threadId, runFile });
+                return summarize("0.7.0-beta.3", "online", steps, { threadId: options.threadId, runFile });
             }
             // 3. Bind the manager thread BEFORE submit, so the very first terminal
             //    transition produces a wake event for this thread. The requestId is
@@ -1329,7 +1329,7 @@ export async function runOnlineCheck(options) {
                     status: "FAIL",
                     detail: redactString(error.message),
                 });
-                return summarize("0.7.0-beta.2", "online", steps, { threadId: options.threadId, runFile });
+                return summarize("0.7.0-beta.3", "online", steps, { threadId: options.threadId, runFile });
             }
             // 4. A session, then ONE real sample coding assignment (unique request id).
             run.requestId = ids.assignment;
@@ -1477,7 +1477,7 @@ export async function runOnlineCheck(options) {
     // assignment and the dispatcher so the wake is delivered once the manager
     // reviews and acks. Cleanup is a SEPARATE, explicit action after review
     // (`pi-durable check --verify`); live daemon data is never removed.
-    return summarize("0.7.0-beta.2", "online", steps, { threadId: options.threadId, runFile });
+    return summarize("0.7.0-beta.3", "online", steps, { threadId: options.threadId, runFile });
 }
 async function waitForFirstEvent(client, projectId, timeoutMs, requestId) {
     const deadline = Date.now() + Math.max(0, timeoutMs);
@@ -1674,7 +1674,7 @@ export async function verifyOnlineCheck(options) {
         detail: start.ok === true ? `listening at ${socketPath}` : `start failed: ${start.code ?? "unknown"}`,
     });
     if (start.ok !== true)
-        return summarize("0.7.0-beta.2", "online", steps, { threadId: run.threadId, runFile });
+        return summarize("0.7.0-beta.3", "online", steps, { threadId: run.threadId, runFile });
     try {
         const client = await PiClient.connect({ socketPath, timeoutMs: 20000 });
         try {
@@ -1786,7 +1786,7 @@ export async function verifyOnlineCheck(options) {
     // remain available for the active assignment and the dispatcher until the
     // manager has reviewed and acked. It also never resubmits any mutation —
     // replaying `--verify <runId>` just re-reads the persisted run record's state.
-    return summarize("0.7.0-beta.2", "online", steps, { threadId: run.threadId, runFile });
+    return summarize("0.7.0-beta.3", "online", steps, { threadId: run.threadId, runFile });
 }
 export { defaultSetupDeps };
 //# sourceMappingURL=check.js.map

@@ -1,3 +1,4 @@
+import { isProtectedRelativePath, resolveProtectedPaths } from "./path-protection.js";
 // ---------------------------------------------------------------------------
 // integration/evidence.ts
 //
@@ -68,12 +69,9 @@ export const PROTECTED_FILES = [
     ".runtime",
 ];
 /** Directory names (anywhere in the tree) that are never read. */
-export const PROTECTED_NAMES = [".git", ".secrets", ".runtime"];
+export { PROTECTED_NAMES } from "./path-protection.js";
 function isProtectedRelative(rel) {
-    const parts = rel.split(sep);
-    if (parts.some((p) => PROTECTED_NAMES.includes(p)))
-        return true;
-    return PROTECTED_FILES.includes(rel);
+    return isProtectedRelativePath(rel.split(sep).join("/"));
 }
 function isProtectedByList(root, rel, list) {
     const abs = resolve(root, rel);
@@ -261,7 +259,7 @@ function isEnoent(error) {
  */
 export async function captureSnapshot(root, options = {}) {
     const sanitize = options.sanitize ?? defaultSanitize;
-    const protectedPaths = options.protectedPaths ?? [];
+    const protectedPaths = resolveProtectedPaths(root, options.protectedPaths ?? []);
     const maxFiles = resolveBound("maxFiles", options.maxFiles, HARD_MAX_FILES);
     const maxFileBytes = resolveBound("maxFileBytes", options.maxFileBytes, HARD_MAX_FILE_BYTES);
     const reasons = [];

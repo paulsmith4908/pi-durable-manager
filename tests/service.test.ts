@@ -405,14 +405,8 @@ test("projects.create initializes a repo, is idempotent, and rejects conflicts",
     assert.equal(created.project.origin, "created");
     await stat(join(projectPath, ".git"));
 
-    // A fresh repo is seeded with the portable AGENTS.md (Codex-only guidance).
-    const agents = await readFile(join(projectPath, "AGENTS.md"), "utf8");
-    assert.match(agents, /Audience: Codex/);
-    assert.match(agents, /One writer per checkout/);
-    assert.match(agents, /Commit, tag, push, publish or deploy when explicitly requested/);
-    assert.doesNotMatch(agents, /<pi-worker-policy|No commits, pushes, deploys/);
-    assert.match(agents, /Keep credentials out of chat/);
-    assert.doesNotMatch(agents, /\/Users\//, "portable AGENTS.md must not leak host paths");
+    // Creating a project must not install repository instructions.
+    await assert.rejects(stat(join(projectPath, "AGENTS.md")), {code:"ENOENT"});
 
     const replay = await client.call<{ project: { id: string }; replayed: boolean }>(
       "projects.create",
@@ -1551,5 +1545,33 @@ test("manager.status.enabled is truthful: false when manager.enabled=false, true
   } finally {
     explicitClient?.close();
     await explicit.cleanup();
+  }
+});
+
+for (const order of ['ascending', 'descending'] as const) test(`mixed oversized transcript entries stay bounded and paginate without gaps (${order})`, async () => {
+  // Exercise the actual serializer/page builder with synthetic storage entries;
+  // the real harness/chunk-reconstruction tests above cover the transport path.
+  const service = Object.create(PiDurableService.prototype) as any;
+  service.knownSecrets = [];
+  const all = Array.from({ length: 24 }, (_, i) => ({ id: String(i + 1), kind: 'message', model: [], data: { text: (i % 2 ? '界' : 'a').repeat(i % 2 ? 110000 : 200000) } }));
+  const sorted = order === 'ascending' ? all : [...all].reverse();
+  const conversation = { id: 'synthetic-large', entries: async (_options: unknown, _limit: number, cursor?: { index: number }) => {
+    const index = cursor?.index ?? 0;
+    return { items: sorted.slice(index, index + 1), next: index + 1 < sorted.length ? { index: index + 1 } : undefined };
+  }};
+  const received: any[] = []; let cursor: string | undefined; let pages = 0;
+  do {
+    const page = await service.readBoundedTranscript(conversation, { maxBytes: 256 * 1024, maxEntries: 200, order, cursor });
+    assert.ok(Buffer.byteLength(JSON.stringify(page)) <= 256 * 1024, 'entire page including cursor, commas and stubs respects the byte budget');
+    assert.ok(page.entries.length > 0, 'each page makes progress');
+    received.push(...page.entries); cursor = page.nextCursor ?? undefined;
+    assert.ok(++pages < 30, 'pagination terminates');
+  } while (cursor);
+  assert.ok(pages > 1);
+  assert.deepEqual(received.map(e => e.id), sorted.map(e => e.id));
+  assert.equal(new Set(received.map(e => e.id)).size, all.length);
+  for (let i = 0; i < received.length; i++) {
+    if (Number(sorted[i]!.id) % 2 === 0) assert.equal(received[i].truncated, true);
+    else assert.deepEqual(received[i], sorted[i]);
   }
 });

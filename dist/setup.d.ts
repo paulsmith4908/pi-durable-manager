@@ -21,7 +21,7 @@
 import { type PiDurableConfig } from "./config.js";
 import { CliUsageError } from "./cli-args.js";
 /** The beta release this tool reports. Kept in one place for setup/check/docs. */
-export declare const BETA_VERSION = "0.7.0-beta.2";
+export declare const BETA_VERSION = "0.7.0-beta.3";
 /**
  * The package name used for the portable Codex plugin + skill.
  *

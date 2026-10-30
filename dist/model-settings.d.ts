@@ -12,6 +12,21 @@ export declare const MODEL_OPERATIONS: {
         readonly requestId: "requestId";
         readonly summary: "Add an immutable connection. Enter keys only in the private Settings page.";
     };
+    readonly 'models.connection.rotate': {
+        readonly params: readonly ["connectionId", "apiKey", "noAuth", "requestId"];
+        readonly requestId: "requestId";
+        readonly summary: "Rotate an added connection credential while no assigned work using it holds a lease. Key input belongs only in private Settings.";
+    };
+    readonly 'models.connection.disable': {
+        readonly params: readonly ["connectionId", "requestId"];
+        readonly requestId: "requestId";
+        readonly summary: "Revoke an added connection for future work and remove its owned private credential; no silent fallback.";
+    };
+    readonly 'models.connection.rename': {
+        readonly params: readonly ["connectionId", "name", "requestId"];
+        readonly requestId: "requestId";
+        readonly summary: "Rename a saved connection without changing execution settings.";
+    };
     readonly 'models.profile.add': {
         readonly params: readonly ["connectionId", "name", "model", "contextWindow", "maxTokens", "reasoning", "compat", "requestId"];
         readonly requestId: "requestId";
@@ -44,6 +59,8 @@ interface Connection {
     noAuth: boolean;
     allowInsecureHttp: boolean;
     legacy?: boolean;
+    disabled?: boolean;
+    credentialRevision?: number;
 }
 export interface ModelProfile {
     id: string;
@@ -73,6 +90,7 @@ export declare class ModelSettings {
     private credentials;
     private extra;
     private pending;
+    private mutationTail;
     constructor(store: MetadataStore, config: PiDurableConfig, legacyModels: () => Models, legacyProvider: string, secrets: string[]);
     catalog(): Catalog;
     profile(id: string): ModelProfile;
@@ -87,6 +105,10 @@ export declare class ModelSettings {
     };
     projectChoice(projectId: string): string;
     pin(projectId: string, requested?: string): string;
+    historicalRef(sessionId: string): {
+        provider: string;
+        modelId: string;
+    };
     sessionRef(projectId: string, sessionId?: string): {
         provider: string;
         modelId: string;
@@ -103,9 +125,11 @@ export declare class ModelSettings {
             noAuth: boolean;
             allowInsecureHttp: boolean;
             legacy?: boolean;
+            disabled?: boolean;
+            credentialRevision?: number;
         }[];
         profiles: {
-            lastTest: unknown;
+            lastTest: any;
             id: string;
             connectionId: string;
             name: string;
@@ -116,6 +140,7 @@ export declare class ModelSettings {
             compat: CompatOverrides;
             legacy?: boolean;
         }[];
+        credentialCleanupPending: number;
         defaultProfileId: string;
         projectId: string | null;
         projectProfileId: string | null;
@@ -123,6 +148,11 @@ export declare class ModelSettings {
         fallback: string;
     };
     run(method: string, p: Record<string, any>): Promise<any>;
+    private assertEnabled;
+    private requireConnectionIdle;
+    private queueCredentialCleanup;
+    private cleanCredentials;
+    private ownedCredential;
     private mutate;
     private discover;
     private test;

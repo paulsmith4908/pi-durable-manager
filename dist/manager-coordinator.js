@@ -212,9 +212,12 @@ export class ManagerWakeCoordinator {
         if (this.stopped || !this.enabled || this.dispatcher === null)
             return;
         void this.reconcileQueued();
-        const projects = this.metadata.listProjectsWithDueManagerEvents(this.now());
-        for (const projectId of projects)
-            this.scheduleProject(projectId, 0);
+        // Restore future backoffs too. Due-only discovery loses a retry timer when
+        // the daemon restarts before its persisted deadline. Unbound/idle projects
+        // retain no timer; rearm schedules only actual pending work.
+        for (const binding of this.metadata.listManagerBindings()) {
+            this.rearm(binding.projectId, binding);
+        }
     }
     /**
      * Stop scheduling, cancel timers, and ABORT + JOIN any in-flight CLI child so

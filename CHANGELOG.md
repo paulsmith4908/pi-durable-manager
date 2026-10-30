@@ -1,5 +1,17 @@
 # Changes
 
+## 0.7.0-beta.3 — security, recovery and operator permissions
+
+- Protect Settings with private operator authority; public viewers cannot mutate settings.
+- Apply one secret-path policy across file tools, shell, evidence and checkpoints.
+- Restore pending wake timers after restart, allow correction after stale acceptance, and bound mixed large transcript pages.
+- Pin runtime dependencies and add guarded inspect/upgrade/repair/rollback plus macOS CI.
+- Add provider rename, credential rotation/revocation, crash cleanup and revision-bound readiness.
+- Add paginated recorded output/assignment history and actual session model labels.
+- Add audited default/project worker permissions with assignment policy snapshots. Stop automatic AGENTS.md creation; existing user files are preserved.
+- Make setup refresh resumable and distinguish installation from provider and GUI-wake verification.
+- Additional release and viewer acceptance details are recorded with the candidate validation receipts.
+
 ## 0.7.0-beta.2 — separate Codex and Pi instruction scopes
 
 - Codex repo guidance permits explicitly user-requested Git and release actions.

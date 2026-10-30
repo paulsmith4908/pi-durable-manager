@@ -14,6 +14,8 @@
  */
 
 import { spawn, type ChildProcess } from "node:child_process";
+import { PROTECTED_NAMES, isProtectedRelativePath, protectedPathFilters, canonicalizeProtectionPath, resolveProtectedPaths } from "./path-protection.js";
+export { PROTECTED_NAMES } from "./path-protection.js";
 import { fileURLToPath } from "node:url";
 import { constants as fsConstants, realpathSync } from "node:fs";
 import { chmod, lstat, mkdir, open, realpath, rm } from "node:fs/promises";
@@ -29,8 +31,6 @@ import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 /** Absolute path to the macOS sandbox launcher. */
 export const SANDBOX_EXEC = "/usr/bin/sandbox-exec";
 
-/** Protected file/directory names that are never read or written through tools. */
-export const PROTECTED_NAMES = [".git", ".secrets", ".runtime", "config.local.json"] as const;
 
 /** Structured, model-visible error codes returned instead of throwing to the service. */
 export type ToolErrorCode =
@@ -102,28 +102,7 @@ export interface ResolvedToolPolicy {
  * descendant compare consistently. Failures fall back to the lexical `resolve`
  * so policy construction never throws on a path the caller owns.
  */
-function canonicalizeForPolicy(absPath: string): string {
-  try {
-    return realpathSync(absPath);
-  } catch {
-    /* path does not exist (or is not accessible); canonicalize what we can */
-  }
-  const lexical = resolve(absPath);
-  let current = lexical;
-  const tail: string[] = [];
-  for (;;) {
-    const parent = dirname(current);
-    if (parent === current) return lexical;
-    tail.unshift(current.slice(parent.length + 1));
-    current = parent;
-    try {
-      const real = realpathSync(current);
-      return resolve(tail.length === 0 ? real : join(real, ...tail));
-    } catch {
-      /* keep walking up */
-    }
-  }
-}
+const canonicalizeForPolicy = canonicalizeProtectionPath;
 
 /**
  * Resolve policy defaults; the root must be absolute.
@@ -139,7 +118,7 @@ export function resolvePolicy(policy: ToolPolicy): ResolvedToolPolicy {
     throw new ToolError("invalid_argument", `project root must be absolute: ${policy.root}`);
   }
   const root = canonicalizeForPolicy(policy.root);
-  const protectedPaths = (policy.protectedPaths ?? []).map((p) => canonicalizeForPolicy(p));
+  const protectedPaths = resolveProtectedPaths(policy.root, policy.protectedPaths ?? []);
   const scratchDir =
     policy.scratchDir !== undefined ? canonicalizeForPolicy(policy.scratchDir) : undefined;
 
@@ -195,8 +174,7 @@ export function isWithin(parent: string, child: string): boolean {
 function namesProtected(root: string, absPath: string): boolean {
   const rel = relative(resolve(root), resolve(absPath));
   if (rel === "" || rel.startsWith("..") || isAbsolute(rel)) return false;
-  const parts = rel.split(sep);
-  return PROTECTED_NAMES.some((name) => parts.includes(name));
+  return isProtectedRelativePath(rel.split(sep).join("/"));
 }
 
 /**
@@ -564,10 +542,15 @@ export function buildSandboxProfile(policy: ResolvedToolPolicy): string {
     }
   }
 
-  // (5) Protected names are denied *at or below the project root* only. This is
-  // scoped with `subpath "<root>/<name>"` rather than a global regex, because a
-  // project may legitimately live inside an ancestor directory named `.runtime`
-  // (scratch/state often does). Ordered after the project allow-rules so it wins.
+  // (5) Compile the same component policy as direct file tools. Anchor inside
+  // the project (not ancestors named .runtime), at every nesting depth. Regex
+  // rules cover protected names created after the command starts as well.
+  for (const filter of protectedPathFilters(policy.root)) {
+    // SBPL regex literals need regex backslashes preserved, unlike string paths.
+    const regex = (pattern: string): string => `(regex #"${pattern.replace(/"/g, '\\"')}")`;
+    const match = filter.except ? `(require-all ${regex(filter.match)} (require-not ${regex(filter.except)}))` : regex(filter.match);
+    rules.push(`(deny file-read* file-write* ${match})`);
+  }
   for (const name of PROTECTED_NAMES) {
     const protectedPath = join(policy.root, name);
     rules.push(`(deny file-read* file-write* (subpath "${sbpl(protectedPath)}"))`);
@@ -585,6 +568,16 @@ export function buildSandboxProfile(policy: ResolvedToolPolicy): string {
   for (const dir of policy.protectedPaths) {
     denyWithScratchException(policy, dir, rules);
     rules.push(`(deny file-read* file-write* (literal "${sbpl(dir)}"))`);
+  }
+
+  // Excluded path names must not be relocatable through a writable ancestor.
+  // Denying entry removal on exact ancestor directories prevents rename/unlink
+  // without denying edits to nonexcluded siblings inside those directories.
+  for (const protectedPath of policy.protectedPaths) {
+    if (!isWithin(policy.root, protectedPath)) continue;
+    for (let parent = dirname(protectedPath); parent !== policy.root && isWithin(policy.root, parent); parent = dirname(parent)) {
+      rules.push(`(deny file-write-unlink (literal "${sbpl(parent)}"))`);
+    }
   }
 
   // (6b) Ancestor metadata: allow `lstat`/`stat` of the *exact* ancestor

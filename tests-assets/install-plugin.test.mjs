@@ -59,7 +59,7 @@ test("installs the plugin into a fresh destination with the official layout", ()
   );
   const manifest = JSON.parse(readFileSync(path.join(dest, "plugin.json"), "utf8"));
   assert.equal(manifest.name, "pi-durable-manager");
-  assert.equal(manifest.version, "0.7.0-beta.2");
+  assert.equal(manifest.version, "0.7.0-beta.3");
   rmSync(base, { recursive: true, force: true });
 });
 
@@ -67,7 +67,7 @@ test("portable root plugin.json matches the official minimum schema", () => {
   const manifest = JSON.parse(readFileSync(path.join(SOURCE_PLUGIN, "plugin.json"), "utf8"));
   assert.equal(manifest.$schema, "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json");
   assert.equal(manifest.name, "pi-durable-manager");
-  assert.equal(manifest.version, "0.7.0-beta.2");
+  assert.equal(manifest.version, "0.7.0-beta.3");
   assert.equal(typeof manifest.description, "string");
   // No MCP server declaration — the plugin is skills-only.
   assert.equal(manifest.mcpServers, undefined);

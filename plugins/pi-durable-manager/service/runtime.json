@@ -1,6 +1,10 @@
 {
-  "schemaVersion": 1,
-  "version": "0.7.0-beta.2",
-  "file": "pi-durable-manager-0.7.0-beta.2.tgz",
-  "sha256": "1a82b6231d093c7b2b2741b886f2aac562f02afd2862324e0bcccff4faa6bc7a"
+  "schemaVersion": 2,
+  "version": "0.7.0-beta.3",
+  "file": "pi-durable-manager-0.7.0-beta.3.tgz",
+  "sha256": "dbfb04972b20b8ec2adeaebbc2c957613cb7907ac34c63e19d45843e772b24cd",
+  "packageFile": "runtime-package.json",
+  "packageSha256": "30d6f519bd36e298196aac00754ba3be5f02cc568a97c756a7ba9df651108e2a",
+  "lockFile": "runtime-lock.json",
+  "lockSha256": "7eea4f78f6ed2290cceae47d187e4e3146a3cbb925591a0418e2c3cae75ce533"
 }

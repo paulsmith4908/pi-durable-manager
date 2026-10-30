@@ -123,6 +123,7 @@ async function fixture(): Promise<Fixture> {
       await engine.whenManagerPauseIdle().catch(() => undefined);
       await coordinator.stop();
       engine.shutdownEngine();
+      await engine.stopAll();
       await harness.close?.(BACKGROUND_CONTEXT).catch(() => undefined);
       metadata.close();
       await storage.close(BACKGROUND_CONTEXT);

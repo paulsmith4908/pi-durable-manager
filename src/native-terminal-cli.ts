@@ -25,8 +25,9 @@ export async function main(argv: string[]): Promise<void> {
     }
     const port = Number(args.get('--port') ?? 5183); if (!Number.isInteger(port) || port < 0 || port > 65535) throw new Error('Invalid port.');
     const app = await startTerminalBrowser({ stateDir: config.paths.stateDir, assignmentId: args.get('--assignment-id'), socketPath: args.get('--socket'), port });
-    if(managed) { const status:any=await (await fetch(app.url+'/status')).json();const path=join(config.paths.stateDir,'terminal-view.json');await writeFile(path+'.next',JSON.stringify({url:app.url,pid:process.pid,instance:status.instance}),{mode:0o600});await rename(path+'.next',path); }
-    console.log(JSON.stringify({ url: app.url, readOnly: true, renderer: 'Pi TUI 1.4.0', agentCreated: false }));
+    if(managed) { const status:any=await (await fetch(app.url+'/status')).json();const path=join(config.paths.stateDir,'terminal-view.json');await writeFile(path+'.next',JSON.stringify({url:app.url,operatorUrl:app.operatorUrl,pid:process.pid,instance:status.instance}),{mode:0o600});await rename(path+'.next',path); }
+    // Managed stdout is a log: the operator capability belongs only in the private receipt.
+    console.log(JSON.stringify({ url: managed ? app.url : app.operatorUrl, observerUrl: app.url, readOnly: true, renderer: 'Pi TUI 1.4.0', agentCreated: false }));
     controller.signal.addEventListener('abort', () => { void app.close().then(async()=>{if(managed)await rm(lock,{force:true});}); }, { once: true });
     return;
   }

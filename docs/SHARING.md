@@ -40,7 +40,7 @@ The build does not recursively embed the generated distribution in the runtime.
 Generated artifacts are replaced locally on the next build.
 
 `release:verify` verifies archive hashes, marketplace paths, version alignment,
-embedded payload integrity, and a real clean runtime installation plus guided
+embedded payload and production-lock integrity, deterministic `npm ci --ignore-scripts`, and a real clean runtime installation plus guided
 configuration/start/stop on this Mac. It uses its own temporary data directory and
 an explicitly unavailable local model endpoint; it creates no worker and makes no
 inference calls. Its result therefore proves packaging and setup, not model coding
@@ -68,14 +68,13 @@ universal availability from a successful local install.
 ## Updating an existing friend installation
 
 Plugin refresh and service upgrade are separate. The private runtime intentionally
-preserves existing configuration. There is no automatic runtime migration in this
-beta. Do not overwrite a running runtime or reset the model endpoint. Follow the
+preserves existing configuration. Supported inspect/upgrade/repair/rollback commands require an idle stopped service and a compatible database schema. There is no unattended migration. Do not overwrite a running runtime or reset the model endpoint. Follow the
 version and safe-handoff guidance in [INSTALL.md](../INSTALL.md#updates-and-removal).
 
 ## Advanced runtime-only installation
 
 If you specifically want CLI/skill installation rather than the complete plugin,
-install the `.tgz` into a private prefix with `npm install --ignore-scripts`, then
+prefer the packaged installer, which verifies the payload and honors the production lock, then
 use its `bin/pi-durable.js setup` and packaged installers. This is not the friend
 quickstart. An editable source skill without the service payload cannot bootstrap
 by itself. The [model settings guide](MODEL-SETTINGS.md) describes providers,

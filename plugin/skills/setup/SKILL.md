@@ -16,3 +16,7 @@ For an existing installation, use its launcher. Inspect `models.settings` and op
 After setup, run `models.test` on the selected profile to verify streamed tool calling and a tool-result round trip. This sends a tiny synthetic prompt to that endpoint; it executes no project commands. A passing connection test is not proof of coding quality or GUI wake delivery. Report those limits honestly. Offer a small end-to-end project test when the user has not already requested a project; for a requested project, continue the normal opt-in workflow.
 
 Unknown model limits require the user's server configuration; do not invent them. Never fall back to another endpoint without the user's choice. OpenAI-compatible servers still require model-specific tool/reasoning templates. If readiness fails, show the failure and keep work unstarted until the selected profile works.
+
+Setup presents worker execution permissions; preserve the user’s choices and use the
+Settings view for later changes. Do not install AGENTS.md into a project during setup.
+Treat the operator viewer link as private authority, never as worker context.

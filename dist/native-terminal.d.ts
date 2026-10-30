@@ -51,7 +51,7 @@ export declare class PiWorkerDisplay {
     private state;
     constructor(ui: Ui, tui: TuiAltScreen, assignment: Row, project: Row);
     ingest(entries: ActivityEntry[]): void;
-    updateStatus(service: Row, assignment: Row, checks: Row, manager: Row, guard: Row | null): void;
+    updateStatus(service: Row, assignment: Row, checks: Row, manager: Row, guard: Row | null, sessionModel?: Row | null): void;
     error(message: string): void;
     action(action: string): void;
     describe(): Row;

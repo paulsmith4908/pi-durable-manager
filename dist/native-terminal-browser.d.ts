@@ -33,6 +33,7 @@ export declare function startTerminalBrowser(options: {
 }): Promise<{
     server: Server;
     url: string;
+    operatorUrl: string;
     close(): Promise<void>;
 }>;
 //# sourceMappingURL=native-terminal-browser.d.ts.map

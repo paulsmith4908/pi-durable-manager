@@ -52,8 +52,12 @@ export async function ensureTerminal(state, config) {
         try {
             const reply = await fetch(r.url + '/status', { signal: AbortSignal.timeout(1500) });
             const body = await reply.json();
-            if (body.pid === r.pid && body.stateDir === state && body.instance === r.instance && body.packageVersion === packageVersion())
-                return r.url;
+            if (body.pid === r.pid && body.stateDir === state && body.instance === r.instance && body.packageVersion === packageVersion()) {
+                const operator = new URL(r.operatorUrl ?? r.url);
+                if (operator.origin !== r.url || !/^#operator=[a-f0-9]{64}$/.test(operator.hash))
+                    throw new Error('Terminal operator authority is missing; restart the idle viewer to upgrade it.');
+                return operator.href;
+            }
         }
         catch { }
         throw new Error('An existing terminal owner is live but not compatible/reachable; review it before replacement.');
@@ -172,10 +176,13 @@ export async function connectWorkflow(argv) {
         }
         const guard = await ensureGuard(state, configPath, threadId);
         const url = await ensureTerminal(state, configPath);
-        const terminalUrl = `${url}/?workflowId=${encodeURIComponent(workflow.id)}`;
+        const terminal = new URL(url);
+        terminal.searchParams.set('workflowId', workflow.id);
+        const terminalUrl = terminal.href;
         const snapshot = await c.call('workflow.status', { id: workflow.id });
         return { workflowId: workflow.id, projectId: workflow.projectId, terminalUrl, guard, snapshot, workerCreated: false,
-            next: workflow.state === 'active' ? 'Open terminalUrl beside the chat. Review snapshot; submit only the next agreed scope with workflow.submit.' : 'Task is retired. Display history only; do not restart.' };
+            operatorUrlPrivate: true,
+            next: workflow.state === 'active' ? 'Open terminalUrl beside the chat. Keep its operator fragment out of worker prompts, roadmaps, public logs and shared files. Review snapshot; submit only the next agreed scope with workflow.submit.' : 'Task is retired. Display history only; do not restart.' };
     }
     finally {
         c.close();

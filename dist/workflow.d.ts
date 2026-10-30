@@ -27,6 +27,10 @@ export declare const WORKFLOW_OPERATIONS: {
         readonly params: readonly ["projectId", "threadId"];
         readonly summary: "Compact recoverable task index, newest first.";
     };
+    readonly 'workflow.assignments': {
+        readonly params: readonly ["id", "before", "limit"];
+        readonly summary: "Bounded assignment history, newest first, with stable exclusive submission-index cursor. Read-only.";
+    };
     readonly 'workflow.status': {
         readonly params: readonly ["id"];
         readonly summary: "Task roadmap, owned assignments, real latest activity, and wake health.";

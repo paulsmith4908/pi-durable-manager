@@ -1,3 +1,4 @@
+import { PERMISSION_OPERATIONS, permissionOperation, effectivePermissions } from "./permissions.js";
 import { CODEX_REPO_GUIDANCE } from "./codex-repo-guidance.js";
 import { withWorkerPolicy } from "./worker-instructions.js";
 import { ModelSettings, MODEL_OPERATIONS } from './model-settings.js';
@@ -249,6 +250,7 @@ export const IMPLEMENTED_METHODS: readonly string[] = [
   ...Object.keys(WORKFLOW_OPERATIONS),
   ...Object.keys(SCORECARD_OPERATIONS),
   ...Object.keys(MODEL_OPERATIONS),
+  ...Object.keys(PERMISSION_OPERATIONS),
   "validation.configure", "validation.profiles", "validation.results", "brief.inspect",
   "service.ping",
   "service.status",
@@ -262,6 +264,7 @@ export const IMPLEMENTED_METHODS: readonly string[] = [
   "sessions.create",
   "sessions.list",
   "sessions.inspect",
+  "sessions.model",
   "sessions.transcript",
   "sessions.entry",
   "sessions.tasks",
@@ -312,7 +315,9 @@ export const OPERATION_DESCRIPTORS: Readonly<Record<string, OperationDescriptor>
   ...WORKFLOW_OPERATIONS,
   ...SCORECARD_OPERATIONS,
   ...MODEL_OPERATIONS,
+  ...PERMISSION_OPERATIONS,
   'assignments.pause': {params:['id','note','requestId'],requestId:'requestId',summary:'Durable admission fence: allow admitted tools to finish, then safely pause while retaining the lease. Read workflow.status for confirmation.'},
+  "sessions.model": { params: ["id"], summary: "Compact pinned session provider/profile/model attribution, without transcript or credentials." },
   "activity.list": { params: ["after", "limit", "projectId"], pagination: ["after"], summary: "Read the durable redacted activity journal by monotonic cursor; <=500KiB/page." },
   "activity.note": { params: ["message", "tag", "requestId"], requestId: "requestId", summary: "Record a redacted manager/runtime-guard note with an idempotent receipt." },
   "supervision.configure": { params: ["assignmentId", "policy", "requestId"], requestId: "requestId", summary: "Persist adaptive check/review policy; no execution deadline and no model polling." },
@@ -989,7 +994,7 @@ export class PiDurableService {
       return errorResponse(id, "version_mismatch", `Unsupported protocol version: ${String(request.v)}.`);
     }
     const params = (request.params ?? {}) as Record<string, unknown>;
-    const mutating = request.method.startsWith("scorecard.") && !["scorecard.read","scorecard.ledger"].includes(request.method) || request.method.startsWith("workflow.") && !["workflow.list","workflow.status","workflow.event"].includes(request.method) || /^(service\.shutdown|projects\.(create|import)|sessions\.(create|steer|followup|configure|compact|reset|fork)|assignments\.(create|submit|abort|cancel|pause|review|restore|recover)|manager\.(bind|unbind|ack|decision)|supervision\.configure)$/.test(request.method);
+    const mutating = request.method.startsWith("scorecard.") && !["scorecard.read","scorecard.ledger"].includes(request.method) || request.method.startsWith("workflow.") && !["workflow.list","workflow.status","workflow.event","workflow.assignments"].includes(request.method) || /^(service\.shutdown|projects\.(create|import)|sessions\.(create|steer|followup|configure|compact|reset|fork)|assignments\.(create|submit|abort|cancel|pause|review|restore|recover)|manager\.(bind|unbind|ack|decision)|supervision\.configure)$/.test(request.method);
     const assignment = typeof params.assignmentId === "string" ? this.metadata.getAssignment(params.assignmentId)
       : typeof params.id === "string" && request.method.startsWith("assignments.") ? this.metadata.getAssignment(params.id) : undefined;
     const context = { projectId: assignment?.projectId ?? (typeof params.projectId === "string" ? params.projectId : null),
@@ -1015,6 +1020,7 @@ export class PiDurableService {
         `Method ${method} is recognized but not implemented in this service slice.`,
       );
     }
+    if (method.startsWith("permissions.")) return permissionOperation(this.metadata, allowNetwork(this.config), method, params) as RpcValue;
     if (method.startsWith("models.")) return await this.modelSettings.run(method, params) as RpcValue;
     if (method.startsWith("scorecard.")) return scorecardOperation(this.metadata, method, params) as RpcValue;
     if (method.startsWith("workflow.")) return await this.workflow.run(method, params) as RpcValue;
@@ -1110,6 +1116,12 @@ export class PiDurableService {
         return (await this.sessionsCreate(params)) as unknown as RpcValue;
       case "sessions.list":
         return { sessions: this.sessionsList(params) as unknown as RpcValue };
+      case "sessions.model": {
+        const session=this.requireSession(params);
+        const profileId=this.metadata.getControl<string>(`workflow-model-session:${session.id}`)??"existing";
+        const profile=this.modelSettings.profile(profileId),connection=this.modelSettings.connection(profile.connectionId);
+        return {sessionId:session.id,projectId:session.projectId,profileId,profileName:profile.name,providerName:connection.name,model:this.modelSettings.historicalRef(session.id),available:!connection.disabled};
+      }
       case "sessions.inspect":
         return (await this.sessionsInspect(params)) as unknown as RpcValue;
       case "sessions.transcript":
@@ -1222,9 +1234,8 @@ export class PiDurableService {
       }
       await mkdir(target, { recursive: false, mode: 0o700 });
       await git(target, ["init", "--quiet"]);
-      // Seed the portable AGENTS.md for a FRESH repo only. `projects.import`
-      // never touches an existing AGENTS.md, so this cannot overwrite one.
-      await writeFile(join(target, "AGENTS.md"), PORTABLE_AGENTS_MD, { mode: 0o644 });
+      // Repository guidance is user-owned. Creating a project grants no authority
+      // to install Codex instructions into its checkout.
     } catch (error) {
       this.metadata.failJournal("project.create", requestId, this.redact(error));
       throw error;
@@ -1423,61 +1434,40 @@ export class PiDurableService {
     }
     const entries: RpcValue[] = [];
     let cursor: Record<string, unknown> | undefined = piCursor;
-    let bytes = 0;
+    let entryBytes = 0;
     let truncated = false;
+    const encode = (next: Record<string, unknown> | undefined): string | null =>
+      next === undefined ? null : this.encodeCursor(next, conversationId, options.order);
+    // Include array separators, stubs, cursor and envelope in the page budget.
+    // In particular, an oversized-entry stub must NEVER reset prior byte usage.
+    const pageBytes = (bytes: number, count: number, next: Record<string, unknown> | undefined, cut: boolean): number =>
+      Buffer.byteLength(JSON.stringify({ entries: [], nextCursor: encode(next), truncated: cut }), "utf8") +
+      bytes + Math.max(0, count - 1);
     for (let i = 0; i < options.maxEntries; i += 1) {
-      const page = await conversation.entries(
-        { order: options.order },
-        1,
-        cursor as never,
-        BACKGROUND_CONTEXT,
-      );
+      const page = await conversation.entries({ order: options.order }, 1, cursor as never, BACKGROUND_CONTEXT);
       const entry = page.items[0];
-      if (entry === undefined) {
-        return { entries, nextCursor: null, truncated: false };
-      }
-      // Pi advances the scan with its own object cursor; we only ever round-trip
-      // it, re-encoding as a versioned opaque string for the wire.
+      if (entry === undefined) return { entries, nextCursor: null, truncated };
       const next = (page.next ?? undefined) as Record<string, unknown> | undefined;
-      const framed = this.frameEntry(entry);
-      const framedBytes = Buffer.byteLength(JSON.stringify(framed), "utf8");
-      if (framedBytes > options.maxBytes) {
-        // A single entry is larger than an entire page budget, so it can NEVER be
-        // returned inline. Emit a compact summary that carries the entryId (for
-        // full retrieval via sessions.entry) and advance PAST it so the caller is
-        // never stuck on an unreturnable entry.
-        truncated = true;
-        entries.push({
-          id: String(entry.id),
-          entryId: String(entry.id),
-          kind: entry.kind,
-          truncated: true,
-          note: "entry exceeds page budget; fetch via sessions.entry",
-        } as RpcValue);
-        bytes = 0;
-        cursor = next;
-        if (next === undefined) break;
-        continue;
+      let framed = this.frameEntry(entry);
+      let framedBytes = Buffer.byteLength(JSON.stringify(framed), "utf8");
+      const oversized: boolean = pageBytes(framedBytes, 1, next, truncated || next !== undefined) > options.maxBytes;
+      if (oversized) {
+        framed = { id: String(entry.id), entryId: String(entry.id), kind: entry.kind,
+          truncated: true, note: "entry exceeds page budget; fetch via sessions.entry" } as RpcValue;
+        framedBytes = Buffer.byteLength(JSON.stringify(framed), "utf8");
       }
-      if (entries.length > 0 && bytes + framedBytes > options.maxBytes) {
-        // The entry fits a fresh page but not this one: stop BEFORE it. The cursor
-        // still points at it, so the caller resumes exactly here (no gap, no dup).
-        return {
-          entries,
-          nextCursor: cursor === undefined ? null : this.encodeCursor(cursor, conversationId, options.order),
-          truncated: true,
-        };
+      if (pageBytes(entryBytes + framedBytes, entries.length + 1, next, truncated || oversized || next !== undefined) > options.maxBytes) {
+        if (!entries.length) throw new ServiceError("frame_budget", "Transcript entry metadata exceeds the page budget.");
+        // Do not advance: this entry (or its stub) starts the next page.
+        return { entries, nextCursor: encode(cursor), truncated: true };
       }
       entries.push(framed);
-      bytes += framedBytes;
+      entryBytes += framedBytes;
+      truncated ||= oversized;
       cursor = next;
       if (next === undefined) break;
     }
-    return {
-      entries,
-      nextCursor: cursor === undefined ? null : this.encodeCursor(cursor, conversationId, options.order),
-      truncated: truncated || cursor !== undefined,
-    };
+    return { entries, nextCursor: encode(cursor), truncated: truncated || cursor !== undefined };
   }
 
   /**
@@ -1577,7 +1567,7 @@ export class PiDurableService {
     });
     return {
       session,
-      model: this.modelSettings.sessionRef(session.projectId, session.id),
+      model: this.modelSettings.historicalRef(session.id),
       profileId: this.metadata.getControl<string>(`workflow-model-session:${session.id}`) ?? "existing",
       entries: bounded.entries,
       nextCursor: bounded.nextCursor,
@@ -1849,7 +1839,7 @@ export class PiDurableService {
       change.thinkingLevel = level;
     }
     if (params.instructions !== undefined) {
-      change.instructions = withWorkerPolicy(this.redactString(requireString(params, "instructions")));
+      change.instructions = withWorkerPolicy(this.redactString(requireString(params, "instructions")), effectivePermissions(this.metadata, allowNetwork(this.config), session.projectId));
     }
     if (params.model !== undefined) {
       // Allow only the pinned model, and only by exact match, to make an

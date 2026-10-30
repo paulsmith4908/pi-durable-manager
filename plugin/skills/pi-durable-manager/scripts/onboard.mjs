@@ -5,7 +5,7 @@ import { randomBytes, randomUUID, timingSafeEqual } from "node:crypto";
 import { readFile, lstat, rename, rm } from "node:fs/promises";
 import { join, dirname, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
-import { DEFAULT_HOME, PLUGIN_ROOT, privateDir, privateWrite, installRuntime, readInstallation, run } from "./runtime-install.mjs";
+import { DEFAULT_HOME, PLUGIN_ROOT, privateDir, privateWrite, installRuntime, readInstallation, run, safeSetupError, setupDiagnostic } from "./runtime-install.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const SAFE_FAILURE = "Setup did not complete. Check Git, Codex queue support, the endpoint, and network access, then retry. Existing installations were preserved.";
@@ -61,6 +61,11 @@ export async function configureService(input, { dataHome, pluginRoot, progress, 
   let credentialPath; let configWritten = false; let startAttempted = false;
   try {
     const runtime = await installer({ dataHome, pluginRoot, progress });
+    if (input.permissions !== undefined) {
+      const { parsePermissions } = await import(pathToFileURL(join(dirname(runtime.bin), "../dist/permissions.js")).href);
+      input.permissions = parsePermissions(input.permissions);
+      if (input.permissions.network !== input.allowNetwork) throw new Error("Networking choices disagree.");
+    }
     const { discoverAppExecutable } = await import(pathToFileURL(join(dirname(runtime.bin), "../dist/cli-setup.js")).href);
     const codex = discoverAppExecutable();
     if (!codex) throw new Error("A compatible Codex installation is required.");
@@ -76,7 +81,7 @@ export async function configureService(input, { dataHome, pluginRoot, progress, 
       "--install-target", "none", "--compatibility-preset", "generic", "--codex-executable", codex, "--json"];
     if (input.allowNetwork) args.push("--allow-network");
     if (input.allowInsecureHttp) args.push("--allow-insecure-http");
-    const setup = JSON.parse(await run(process.execPath, args));
+    const setup = JSON.parse(await run(process.execPath, args, { phase: "configure" }));
     if (!setup.ok) throw new Error(SAFE_FAILURE);
     configWritten = true;
     // This is the new config just generated above; never replace an existing installation.
@@ -92,14 +97,24 @@ export async function configureService(input, { dataHome, pluginRoot, progress, 
     if (checks.some(c => c.id === "codex" && c.level !== "pass")) throw new Error("Compatible Codex queue support is required for automatic manager wake-up.");
     progress("Starting Pi Durable…");
     startAttempted = true;
-    const start = JSON.parse(await run(process.execPath, [runtime.bin, "service", "start", "--config", configPath, "--json"]));
+    const start = JSON.parse(await run(process.execPath, [runtime.bin, "service", "start", "--config", configPath, "--json"], { phase: "service_start" }));
     if (!start.ok || !start.result.ok || start.result.alreadyRunning) throw new Error("A service conflict was detected. Review the existing process before retrying.");
-    const status = JSON.parse(await run(process.execPath, [runtime.bin, "service", "status", "--config", configPath, "--json"]));
+    const status = JSON.parse(await run(process.execPath, [runtime.bin, "service", "status", "--config", configPath, "--json"], { phase: "service_check" }));
     if (!status.ok || !status.result.running || status.result.status.packageVersion !== runtime.version) throw new Error(SAFE_FAILURE);
+    // Save the user's explicit setup choices through the same operator policy API.
+    // Older callers omit permissions and retain their existing networking choice.
+    if (input.permissions !== undefined) {
+      const { PiClient } = await import(pathToFileURL(join(dirname(runtime.bin), "../dist/client.js")).href);
+      const client = await PiClient.connect({ stateDir: join(dataHome, "state") });
+      try {
+        const current = await client.call("permissions.read", {});
+        await client.call("permissions.set", { policy: input.permissions, expectedRevision: current.revision, requestId: "setup-permissions" }, "setup-permissions");
+      } finally { client.close(); }
+    }
     const installation = {
       schemaVersion: 1, version: runtime.version, payloadSha256: runtime.sha256,
       node: process.execPath, bin: runtime.bin, configPath, dataHome,
-      installedAt: new Date().toISOString(), serviceHealthy: true, providerCodingVerified: false,
+      installedAt: new Date().toISOString(), serviceHealthy: true, providerToolCallingVerified: false, providerCodingVerified: false, guiWakeVerified: false,
     };
     const staged = join(dataHome, `.installation-${randomUUID()}.json`);
     await privateWrite(staged, JSON.stringify(installation, null, 2) + "\n", true);
@@ -113,7 +128,9 @@ export async function configureService(input, { dataHome, pluginRoot, progress, 
       if (credentialPath && !(await exists(configPath))) await rm(credentialPath, { force: true });
     }
     // No raw exception/provider/npm output crosses into the browser or Codex transcript.
-    throw new Error(startAttempted ? "Service startup or final verification failed. Ask Codex to inspect it before retrying; its config was preserved." : SAFE_FAILURE);
+    const safe = safeSetupError(error, startAttempted ? "service_check" : "configure");
+    if (startAttempted) { safe.configPreserved = true; safe.message += " Its config was preserved; ask Codex to inspect it before retrying."; }
+    throw safe;
   } finally { input.key = ""; await rm(lease, { force: true }); }
 }
 
@@ -155,13 +172,13 @@ export async function startOnboarding({ dataHome = process.env.PI_DURABLE_HOME |
       }
       if (path !== "/api/install") return send(response, 404, { error: "Unknown setup action." });
       if (busy || state.phase === "done" || existing) return send(response, 409, { error: "Setup is already active or an installation exists." });
-      busy = true; state.phase = "installing"; state.message = "Preparing your runtime…";
+      busy = true; delete state.error; state.phase = "installing"; state.message = "Preparing your runtime…";
       send(response, 202, { accepted: true });
       try {
         const installation = await configure(input, { dataHome, pluginRoot, progress: message => { state.message = message; } });
-        state.phase = "done"; state.message = "Pi Durable is ready. Return to Codex and ask it to use Pi for a task.";
-        state.installation = { version: installation.version, configPath: installation.configPath, serviceHealthy: installation.serviceHealthy, providerCodingVerified: false };
-      } catch { state.phase = "failed"; state.message = SAFE_FAILURE; }
+        state.phase = "done"; state.message = "Pi Durable is installed and the service is healthy. Return to Codex to verify your selected model before starting work.";
+        state.installation = { version: installation.version, configPath: installation.configPath, serviceHealthy: installation.serviceHealthy, providerToolCallingVerified: false, providerCodingVerified: false, guiWakeVerified: false };
+      } catch (error) { state.phase = "failed"; state.error = setupDiagnostic(error); state.message = `${state.error.message} [${state.error.phase}: ${state.error.code}]`; }
       finally { input.key = ""; busy = false; }
     } catch { if (!response.headersSent) send(response, 400, { error: "Invalid setup request." }); else response.end(); }
   });

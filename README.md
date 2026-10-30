@@ -4,14 +4,14 @@ Let Codex manage a project while Pi workers write the code using a model you cho
 Codex stays in your desktop chat; Pi runs locally, keeps durable task history, asks
 questions when it needs a decision, and wakes that chat when work needs review.
 
-**macOS beta · 0.7.0-beta.2 · explicit opt-in · no MCP server required**
+**macOS beta · 0.7.0-beta.3 · explicit opt-in · no MCP server required**
 
 ## Install with Codex
 
 Give Codex this prompt:
 
 > Install Pi Durable from https://github.com/paulsmith4908/pi-durable-manager
-> at tag v0.7.0-beta.2. Read INSTALL.md and follow the supported plugin setup.
+> at tag v0.7.0-beta.3. Read INSTALL.md and follow the supported plugin setup.
 > Preserve my existing settings. Open guided setup so I can enter my model
 > endpoint privately, then check the connection.
 
@@ -47,12 +47,13 @@ The browser beside the chat has three views:
 - **Progress:** roadmap, current step, recent plain-English work.
 - **Terminal:** the actual Pi renderer observing the same worker, with recorded
   history. Opening it does not start a separate agent.
-- **Settings:** saved providers/models, the default for new projects, and project
+- **Settings:** operator-controlled worker permissions, saved providers/models, the default for new projects, and project
   overrides. Existing sessions keep their model; no silent fallback.
 
 ## Instruction ownership
 
-Repository `AGENTS.md` guides Codex. The plugin skill guides Codex as Pi manager.
+Pi never creates `AGENTS.md` in your projects. Existing repository instructions remain yours.
+Repository `AGENTS.md`, when you choose to provide it, guides Codex. The plugin skill guides Codex as Pi manager.
 Pi worker restrictions are injected into the worker agent by the service; they
 are not global Codex rules. Codex can carry out explicitly requested Git/release
 actions after reviewing and settling worker work. See
@@ -90,8 +91,10 @@ The viewer can disconnect without stopping workers.
 - Provider token counts are recorded where available. Billing cost is not computed.
 - Worker networking is a separate explicit setup choice. Model access does not
   automatically grant workers package-download or other network access.
-- Profiles are immutable; add a replacement to change an endpoint or key. Updating
-  a plugin does not silently replace the private runtime of an existing installation.
+- Model profiles and endpoint addresses are immutable; add a replacement to change
+  them. Added providers support key rotation and disabling in Settings once their
+  workers are settled. The original externally configured connection is preserved.
+  Updating a plugin does not silently replace an existing private runtime.
 - This is a local-executor beta, not a general ChatGPT web/mobile plugin. Nothing
   is committed, pushed, published or deployed automatically.
 
@@ -104,7 +107,7 @@ npm run release:build
 npm run release:verify
 ```
 
-`artifacts/pi-durable-manager-repository-0.7.0-beta.2.zip` is the clean repository
+`artifacts/pi-durable-manager-repository-0.7.0-beta.3.zip` is the clean repository
 snapshot to share or publish later. It contains source, documentation, a repo
 marketplace, and `plugins/pi-durable-manager/` with its bundled runtime. Use this
 prepared snapshot, not the working directory with local scratch/history.
@@ -118,3 +121,9 @@ See [release and sharing instructions](docs/SHARING.md), [changes](CHANGELOG.md)
 and the technical guides in `docs/` for recovery, validation and operating details.
 
 MIT licensed. Includes upstream Pi packages under their own licenses.
+
+Worker permissions can be changed in Settings for the default or a project. They cover
+file editing, shell commands, development networking, configured browser checks and
+additional excluded paths. Changes require affected work to be stopped first. The
+private operator link grants settings access; a plain observer link is read-only.
+See [permission controls](plugin/skills/pi-durable-manager/references/permissions.md).

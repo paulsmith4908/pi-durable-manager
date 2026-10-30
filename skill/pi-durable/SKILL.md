@@ -18,6 +18,21 @@ alone does not authorize publication. Keep secrets private and preserve selected
 Execution budgets are unlimited by default. This integration uses the local CLI, not MCP
 or a Decisions API. See [instruction boundaries](references/instruction-boundaries.md).
 
+## Operator permissions and private viewer access
+
+Inspect `permissions.read` before delegating. The operator controls file editing, shell,
+networking, configured host validation and additional excluded paths. Preserve those
+choices. A worker refusal is not permission to expand access: explain it and obtain an
+explicit user grant if one does not already cover the change. Use `permissions.set` only
+within that grant, with the current revision and after affected work is safely settled.
+See [permissions](references/permissions.md). Do not create or rewrite AGENTS.md as part
+of connecting or creating a project; repository guidance is a separate user request.
+
+The returned operator viewer URL is private: open it in the user's browser, but never
+put it in worker tasks, roadmaps, project files or shared logs. Its fragment grants
+Settings access. The plain observer URL grants no settings authority. Reconnect to obtain
+an operator link if Settings is locked; never weaken the authentication check.
+
 ## First use or reconnect
 
 Use the launcher relative to THIS skill directory:
@@ -135,3 +150,7 @@ development separate from a delegated project's score. Measurement does not auth
 ## Model selection and Settings
 
 Read `references/model-settings.md` when configuring or choosing models. Open the live browser's `#settings` tab for private connection setup. Resolve a user's named model against `models.settings`; if ambiguous, ask which saved profile. Pass `profileId` to `workflow.submit` for an explicit choice, otherwise keep the saved project profile/default. Report the selected profile when beginning. Never silently change connections or retry on a different model. New sessions pin their profile; answer/recovery continuations keep the project choice.
+
+### Runtime updates
+
+Plugin refresh and runtime upgrade are separate. Use the packaged `scripts/maintenance.mjs` inspect/upgrade/repair/rollback commands for plugin-managed installations. Mutations require a stopped idle service, no writer leases and compatible database schema. Reconnect explicitly; verify version, preserved model choice and permissions. Never reset config to repair an installation or place private backups in a shared repo.

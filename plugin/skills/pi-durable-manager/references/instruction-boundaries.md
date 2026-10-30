@@ -24,3 +24,6 @@ filter. Sandbox/tool permissions and one-writer leases remain separate enforceme
 For a user-requested release, review and settle the worker, then Codex performs the
 requested Git/release operation itself. No additional policy exception is needed solely
 because the worker is prohibited from doing it.
+
+New projects no longer receive generated AGENTS.md. Operator-owned execution permissions
+are described in [permissions](permissions.md); worker prompts describe the recorded policy.

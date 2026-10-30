@@ -1,3 +1,4 @@
+import { type PermissionSnapshot } from "./permissions.js";
 import type { Harness, Registry } from "@earendil-works/pi-durable";
 import { type KnownSecrets } from "./redact.js";
 import { type QuarantineDecision } from "./process-quarantine.js";
@@ -164,7 +165,7 @@ export declare class AssignmentLimitError extends Error {
  */
 export declare function mapSettledStatus(status: PiSubmissionStatus): AssignmentState;
 /** Build the worker instruction block delivered to the agent. */
-export declare function buildInstructions(project: ProjectRecord, task: string, criteria: string | undefined): string;
+export declare function buildInstructions(project: ProjectRecord, task: string, criteria: string | undefined, permissions?: PermissionSnapshot): string;
 /** The engine: durable orchestration of assignments over a shared harness. */
 export declare class AssignmentEngine {
     private readonly harness;
@@ -725,6 +726,7 @@ export declare class AssignmentEngine {
     /** Execute the deadline action once, scoped to the target project's scope. */
     private fireDeadline;
     /** Build (or reuse) the per-project tool bundle with a UNIQUE extension name. */
+    private readonly bundlePermissions;
     private ensureBundle;
     /**
      * Handle a background run rejection.

@@ -4,11 +4,12 @@ import { createServer, type Server, type ServerResponse } from 'node:http';
 import { readFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { createRequire } from 'node:module';
-import { randomUUID } from 'node:crypto';
+import { randomUUID, randomBytes, timingSafeEqual } from 'node:crypto';
 import type { Terminal } from '@earendil-works/pi-tui';
 import { connectObserver, observeWorker, readAssignmentSummary, observerError, terminalText, type ObserverRpc, type PiWorkerDisplay } from './native-terminal.js';
 import { readTerminalOverview } from './terminal-overview.js';
 import { assignmentLabels, assignmentStateLabel } from './assignment-labels.js';
+import { recordedHistory } from './recorded-history.js';
 import { TERMINAL_HTML } from './terminal-page.js';
 
 /** Bridges the real Pi TUI's VT output, not HTML message imitations, into xterm. */
@@ -35,7 +36,7 @@ function dimension(raw: string | null, fallback: number, min: number, max: numbe
   const n = raw === null ? fallback : Number(raw); if (!Number.isInteger(n) || n < min || n > max) throw new RangeError('Invalid terminal dimensions'); return n;
 }
 interface View { terminal: BrowserTerminal; controller: AbortController; response: ServerResponse; display?: PiWorkerDisplay; }
-export async function startTerminalBrowser(options: { stateDir: string; port?: number; assignmentId?: string; socketPath?: string; rpc?: ObserverRpc }): Promise<{ server: Server; url: string; close(): Promise<void> }> {
+export async function startTerminalBrowser(options: { stateDir: string; port?: number; assignmentId?: string; socketPath?: string; rpc?: ObserverRpc }): Promise<{ server: Server; url: string; operatorUrl: string; close(): Promise<void> }> {
   const ownConnection = options.rpc ? null : await connectObserver(options.stateDir, options.socketPath);
   // A test-supplied caller is still narrowed inside observeWorker and here.
   const { readOnlyRpc } = await import('./native-terminal.js');
@@ -47,7 +48,14 @@ export async function startTerminalBrowser(options: { stateDir: string; port?: n
     ['/fit.js', { type: 'text/javascript', bytes: await readFile(fit) }],
     ['/xterm.css', { type: 'text/css', bytes: await readFile(join(dirname(xterm), '../css/xterm.css')) }],
   ]);
+  // A private manager/operator capability is never exposed by a public route.
+  // Origin and CSRF checks protect browsers, not worker subprocesses with network access.
+  const operatorToken = randomBytes(32).toString('hex');
   const settingsToken=randomUUID();
+  const authorized = (value: string | undefined): boolean => {
+    const actual = Buffer.from(value ?? ''), expected = Buffer.from('Bearer ' + operatorToken);
+    return actual.length === expected.length && timingSafeEqual(actual, expected);
+  };
   const settingsCall=async(method:string,params:Record<string,unknown>)=>{if(options.rpc)return options.rpc.call(method,params);const client=await PiClient.connect({stateDir:options.stateDir,socketPath:options.socketPath,timeoutMs:70000});try{return await client.call(method,params);}finally{client.close();}};
   const maxViews = 8; let attaching = 0;
   const views = new Map<string, View>(); const instance = randomUUID(); let origin = '';
@@ -57,18 +65,19 @@ export async function startTerminalBrowser(options: { stateDir: string; port?: n
     if (req.headers.host !== new URL(origin).host || req.headers.origin && req.headers.origin !== origin || req.headers['sec-fetch-site'] === 'cross-site') return json(403, { error: 'Loopback terminal only' });
     const settingsUrl=new URL(req.url??'/',origin);
     if(settingsUrl.pathname==='/settings'){
+      if (!authorized(req.headers.authorization)) return json(403, { error: 'Settings requires the private operator link from Codex. Reconnect Pi to reopen it.' });
       try {
         if(req.method==='GET'){
           const workflowId=settingsUrl.searchParams.get('workflowId');
           const projectId=workflowId?(await rpc.call<any>('workflow.status',{id:workflowId})).workflow.projectId:undefined;
-          return json(200,{...await settingsCall('models.settings',{...(projectId?{projectId}:{})}) as any,csrf:settingsToken});
+          return json(200,{...await settingsCall('models.settings',{...(projectId?{projectId}:{})}) as any,permissions:await settingsCall('permissions.read',projectId?{projectId}:{}),csrf:settingsToken});
         }
         if(req.method!=='POST')return json(405,{error:'Use GET or POST'});
         if(req.headers.origin!==origin||req.headers['x-pi-settings']!==settingsToken||req.headers['content-type']!=='application/json')return json(403,{error:'Open Settings in this Pi panel'});
         let body='';for await(const chunk of req){body+=chunk.toString('utf8');if(Buffer.byteLength(body)>32768)return json(413,{error:'Settings request too large'});}
-        const input=JSON.parse(body),allowed=['connection.add','profile.add','default','project','discover','test'];
+        const input=JSON.parse(body),allowed=['connection.add','connection.rotate','connection.disable','connection.rename','profile.add','default','project','discover','test','permissions.set'];
         if(!allowed.includes(input.action)||!input.params||typeof input.params!=='object'||Array.isArray(input.params))return json(400,{error:'Unknown settings action'});
-        const result=await settingsCall('models.'+input.action,input.params);return json(200,result);
+        const result=await settingsCall(input.action==='permissions.set'?'permissions.set':'models.'+input.action,input.params);return json(200,result);
       }catch(e){return json(400,{error:e instanceof Error?e.message:'Settings request failed'});}
     }
     if (req.method !== 'GET'  && req.method !== 'HEAD') return json(405, { error: 'Read-only observer' });
@@ -76,9 +85,22 @@ export async function startTerminalBrowser(options: { stateDir: string; port?: n
     if (url.pathname === '/') { res.writeHead(200, { ...headers, 'Content-Type': 'text/html; charset=utf-8' }); res.end(TERMINAL_HTML); return; }
     const asset = assets.get(url.pathname); if (asset) { res.writeHead(200, { ...headers, 'Content-Type': asset.type }); res.end(asset.bytes); return; }
     try {
+      if (url.pathname === '/history') {
+        const html=await recordedHistory(rpc,url);
+        res.writeHead(200,{...headers,'Content-Type':'text/html; charset=utf-8'});res.end(req.method==='HEAD'?undefined:html);return;
+      }
       if (url.pathname === '/overview') return json(200, await readTerminalOverview(rpc, url.searchParams.get('workflowId'), url.searchParams.get('assignmentId') ?? options.assignmentId));
       if (url.pathname === '/assignments') {
         const workflowId=url.searchParams.get('workflowId');
+        if(workflowId && url.searchParams.get('history')==='1') {
+          const before=url.searchParams.get('before');
+          const page=await rpc.call<any>('workflow.assignments',{id:workflowId,...(before!==null?{before:Number(before)}:{}),limit:20});
+          const labels=assignmentLabels(page.roadmap??'');
+          return json(200,{...page,roadmap:undefined,assignments:page.assignments.map((a:any)=>{
+            const title=labels.get(a.id)||`Assignment ${a.number}`;
+            return {...a,title,label:`${title} · ${assignmentStateLabel(a.state)}`};
+          })});
+        }
         const task=workflowId ? await rpc.call<any>('workflow.status',{id:workflowId}) : null;
         const list: { assignments: Record<string, any>[] } = task ? {assignments:task.assignments} : await rpc.call<{ assignments: Record<string, any>[] }>('assignments.list');
         // Workflow order is submission order. Reviewing an old assignment updates
@@ -138,11 +160,11 @@ export async function startTerminalBrowser(options: { stateDir: string; port?: n
       void observeWorker({ rpc, terminal, stateDir: options.stateDir, assignmentId, signal: controller.signal, onDisplay: d => { view.display = d; } })
         .catch(error => send('failure', observerError(error).message))
         .finally(() => { clearInterval(heartbeat); views.delete(id); res.end(); });
-    } catch (error) { const detail = observerError(error); json(error instanceof RangeError ? 400 : 503, { error: error instanceof RangeError ? 'Invalid terminal dimensions' : detail.message, code: detail.code }); }
+    } catch (error) { const detail = observerError(error); json(error instanceof RangeError ? 400 : 503, { error: error instanceof RangeError ? 'Invalid display parameters' : detail.message, code: detail.code }); }
   });
   try { await new Promise<void>((resolve, reject) => { server.once('error', reject); server.listen(options.port ?? 0, '127.0.0.1', resolve); }); }
   catch (e) { ownConnection?.close(); throw e; }
   origin = `http://127.0.0.1:${(server.address() as { port: number }).port}`;
-  return { server, url: origin, async close() { for (const v of views.values()) { v.controller.abort(); v.response.end(); } views.clear(); await new Promise<void>(resolve => { server.close(() => resolve()); server.closeAllConnections(); }); ownConnection?.close(); } };
+  return { server, url: origin, operatorUrl: origin + '/#operator=' + operatorToken, async close() { for (const v of views.values()) { v.controller.abort(); v.response.end(); } views.clear(); await new Promise<void>(resolve => { server.close(() => resolve()); server.closeAllConnections(); }); ownConnection?.close(); } };
 }
 

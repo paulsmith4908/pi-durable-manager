@@ -60,7 +60,11 @@ test("setup UI blocks cross-origin/unauthenticated mutations and duplicate insta
       await new Promise(resolve => setTimeout(resolve, 10));
     }
     assert.equal(installs, 1);
-    assert.equal((await (await fetch(`${base}/api/status`, { headers })).json()).phase, "done");
+    const installed = await (await fetch(`${base}/api/status`, { headers })).json();
+    assert.equal(installed.phase, "done");
+    assert.match(installed.message, /installed.*verify your selected model/);
+    assert.equal(installed.installation.providerToolCallingVerified, false);
+    assert.equal(installed.installation.guiWakeVerified, false);
   } finally { release(); await app.close(); await rm(home, { recursive: true, force: true }); }
 });
 
@@ -116,4 +120,23 @@ test("uncertain service startup preserves its config and credential reference fo
     await assert.rejects(() => stat(join(dataHome, "installation.json")), { code: "ENOENT" });
     await assert.rejects(() => stat(join(dataHome, "setup.lock")), { code: "ENOENT" });
   } finally { await rm(base, { recursive: true, force: true }); }
+});
+
+
+test("setup browser survives refresh during installation and distinguishes installation from provider readiness", {skip:process.env.PDM_HOST_BROWSER_TEST!=="1"}, async()=>{
+ const home=await mkdtemp(join(tmpdir(),"pi-onboard-reload-"));let release;const gate=new Promise(resolve=>{release=resolve;});
+ const app=await startOnboarding({dataHome:home,configure:async()=>{await gate;return {version:"fixture",serviceHealthy:true};}});
+ const {chromium}=await import("playwright-core");let browser;
+ try {
+  browser=await chromium.launch({headless:true,executablePath:"/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"});
+  const page=await browser.newPage();page.setDefaultTimeout(10000);await page.goto(app.url);
+  assert.equal(new URL(page.url()).hash,"");
+  await page.reload();await page.waitForFunction(()=>document.querySelector('#status').textContent.includes('Enter your model endpoint'));
+  const original=new URL(app.url),headers={Authorization:'Bearer '+original.hash.slice(1),Origin:original.origin,'Content-Type':'application/json'};
+  assert.equal((await fetch(original.origin+'/api/install',{method:'POST',headers,body:'{}'})).status,202);
+  await page.reload();await page.waitForFunction(()=>document.querySelector('#status').textContent.includes('Preparing your runtime'));
+  release();await page.waitForFunction(()=>document.querySelector('#details').textContent.includes('Provider tool calling: not verified'));
+  assert.match(await page.locator('#status').innerText(),/installed/);
+  await page.reload();await page.waitForFunction(()=>document.querySelector('#details').textContent.includes('Coding and GUI wake: not verified'));
+ }finally{release();await browser?.close();app.server.closeAllConnections();await app.close();await rm(home,{recursive:true,force:true});}
 });

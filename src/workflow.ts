@@ -13,6 +13,7 @@ export interface WorkflowRecord {
 export const WORKFLOW_OPERATIONS = {
   'workflow.open': { params: ['projectId','threadId','objective','roadmap','requestId'], requestId: 'requestId', summary: 'Opt into one durable project task; reconnect the same owner without duplicating workers.' },
   'workflow.list': { params: ['projectId','threadId'], summary: 'Compact recoverable task index, newest first.' },
+  'workflow.assignments': { params: ['id','before','limit'], summary: 'Bounded assignment history, newest first, with stable exclusive submission-index cursor. Read-only.' },
   'workflow.status': { params: ['id'], summary: 'Task roadmap, owned assignments, real latest activity, and wake health.' },
   'workflow.update': { params: ['id','roadmap','requestId'], requestId: 'requestId', summary: 'Persist the manager roadmap and milestone acceptance criteria.' },
   'workflow.submit': { params: ['id','task','criteria','parentId','milestoneId','profileId','requestId'], requestId: 'requestId', summary: 'Submit one task-owned assignment with a fresh session and unlimited default execution budget.' },
@@ -48,7 +49,7 @@ export class WorkflowService {
   constructor(private store: MetadataStore, private call: (method: string, params: Params) => Promise<any>, private changed: () => void = () => {}) {}
   // Serialise multi-step workflows. Underlying engine still enforces checkout leases.
   run(method: string, p: Params): Promise<any> {
-    const read = ['workflow.list','workflow.status','workflow.event'].includes(method);
+    const read = ['workflow.list','workflow.status','workflow.event','workflow.assignments'].includes(method);
     if (read) return this.execute(method, p);
     const result = this.tail.then(() => this.execute(method, p));
     this.tail = result.catch(() => {}); return result;
@@ -79,6 +80,21 @@ export class WorkflowService {
     }
     if (method === 'workflow.open') return this.open(p);
     const t = this.task(str(p,'id'));
+    if (method === 'workflow.assignments') {
+      // Submission indices are immutable even as new work is appended. Resolve
+      // only the requested page, never every historical evidence-bearing row.
+      const requests=t.submissions.length>0, slots=requests?t.submissions:t.assignments;
+      const before=p.before??slots.length,limit=p.limit??20;
+      if(!Number.isSafeInteger(before)||before<0||before>slots.length||!Number.isSafeInteger(limit)||limit<1||limit>50)throw new StoreError('invalid_params','Invalid assignment history cursor/limit.');
+      const start=Math.max(0,before-limit);
+      const resolve=(slot:string)=>requests?this.store.getAssignmentByRequest(slot):this.store.getAssignment(slot);
+      const rows=slots.slice(start,before).map((slot,index)=>({row:resolve(slot),number:start+index+1})).filter(v=>v.row&&v.row.projectId===t.projectId);
+      const latest=resolve(slots.at(-1)??'')??this.store.getAssignment(t.assignments.at(-1)??'');
+      const lease=this.store.getActiveLease(this.store.getProject(t.projectId)!.path);
+      const selected=lease&&workflowOwns(this.store,t,lease.id)?lease:latest;
+      return {workflowId:t.id,roadmap:t.roadmap,total:slots.length,before,nextBefore:start||null,selected:selected?.id??null,
+        assignments:rows.reverse().map(({row:a,number})=>({id:a!.id,number,sessionId:a!.sessionId,projectId:a!.projectId,state:a!.state,leaseHeld:!!a!.leasePath,createdAt:a!.createdAt}))};
+    }
     if (method === 'workflow.status') {
       return { workflow:t, operatorPause:t.pause?(t.pause.assignmentId?this.store.getControl(`operator-pause:${t.pause.assignmentId}`)??{status:'settled',assignmentId:t.pause.assignmentId}:{status:'paused',assignmentId:null}):null, assignmentCount:this.rows(t).length, assignments:this.rows(t).slice(-20).map(a=>({id:a.id,sessionId:a.sessionId,state:a.state,parentId:a.parentId,leaseHeld:!!a.leasePath,updatedAt:a.updatedAt,latestActivity:(()=>{const e=this.store.latestWorkActivity(a.id);return e?{seq:e.seq,at:e.at,kind:e.kind}:null;})()})),
         binding:this.store.getManagerBinding(t.projectId)??null, manager:await this.call('manager.status',{projectId:t.projectId}),
@@ -182,10 +198,16 @@ export class WorkflowService {
     if(!['needs_review',state].includes(a.state))throw new StoreError('review_conflict','Assignment already has a different state or verdict.');
     const evidence=await this.call('assignments.evidence',{id:a.id,section:'summary'});
     if(evidence.sha256!==hash)throw new StoreError('evidence_stale','The evidence summary differs from what the manager inspected.');
-    await this.call('manager.decision',{eventId,action:decision,note,requestId:`${requestId}:decision`});
-    // A lost review response must not repeat an accepted mutation or replace its timestamp.
+    const recorded=this.store.getControl<{action:string,note:string}>(`manager-decision:${eventId}`);
+    if(recorded&&(recorded.action!==decision||recorded.note!==note))throw new StoreError('review_conflict','A different decision was already recorded for this event.');
+    // beginJournal above persists the requested verdict as intent. Only record
+    // a final manager decision AFTER assignments.review validates the current
+    // checkout and applies it. Failed acceptance must remain revisable.
+    // A lost applied-review response is reconciled from durable assignment state
+    // without reapplying acceptance or replacing its timestamp.
     if(a.state!==state)await this.call('assignments.review',{id:a.id,decision,note});
     else if(a.reviewNote!==note)throw new StoreError('review_conflict','Existing review note differs; inspect the prior verdict.');
+    await this.call('manager.decision',{eventId,action:decision,note,requestId:`${requestId}:decision`});
     recordWorkflowActivity(this.store,t,eventId,decision==='accept'?'review':'revision_guidance',note,a.id);
     await this.call('manager.ack',{eventId,requestId:`${requestId}:ack`});
     return {workflowId:t.id,assignment:this.store.getAssignment(a.id),eventId,decision,evidenceHash:hash};

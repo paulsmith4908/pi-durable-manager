@@ -1,0 +1,34 @@
+name: macOS quality gates
+on:
+  push:
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  tests:
+    runs-on: macos-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22.22.1'
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - run: npm run typecheck
+      - run: npm run pretest
+      - name: Install browser prerequisite
+        run: test -x '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome' || brew install --cask google-chrome
+      - name: Unit, sandbox and Chrome checks
+        run: npm run test:only
+        env:
+          PDM_HOST_BROWSER_TEST: '1'
+      - run: npm run release:build
+      - name: Verify locked artifact installation
+        run: node scripts/verify-release.mjs --runtime-only
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: release-verification
+          path: artifacts/release-verification.json
+# Native Codex picker/wake acceptance remains a separate Mac release gate.

@@ -4,10 +4,11 @@ import { createServer } from 'node:http';
 import { readFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { createRequire } from 'node:module';
-import { randomUUID } from 'node:crypto';
+import { randomUUID, randomBytes, timingSafeEqual } from 'node:crypto';
 import { connectObserver, observeWorker, readAssignmentSummary, observerError, terminalText } from './native-terminal.js';
 import { readTerminalOverview } from './terminal-overview.js';
 import { assignmentLabels, assignmentStateLabel } from './assignment-labels.js';
+import { recordedHistory } from './recorded-history.js';
 import { TERMINAL_HTML } from './terminal-page.js';
 /** Bridges the real Pi TUI's VT output, not HTML message imitations, into xterm. */
 export class BrowserTerminal {
@@ -55,7 +56,14 @@ export async function startTerminalBrowser(options) {
         ['/fit.js', { type: 'text/javascript', bytes: await readFile(fit) }],
         ['/xterm.css', { type: 'text/css', bytes: await readFile(join(dirname(xterm), '../css/xterm.css')) }],
     ]);
+    // A private manager/operator capability is never exposed by a public route.
+    // Origin and CSRF checks protect browsers, not worker subprocesses with network access.
+    const operatorToken = randomBytes(32).toString('hex');
     const settingsToken = randomUUID();
+    const authorized = (value) => {
+        const actual = Buffer.from(value ?? ''), expected = Buffer.from('Bearer ' + operatorToken);
+        return actual.length === expected.length && timingSafeEqual(actual, expected);
+    };
     const settingsCall = async (method, params) => { if (options.rpc)
         return options.rpc.call(method, params); const client = await PiClient.connect({ stateDir: options.stateDir, socketPath: options.socketPath, timeoutMs: 70000 }); try {
         return await client.call(method, params);
@@ -75,11 +83,13 @@ export async function startTerminalBrowser(options) {
             return json(403, { error: 'Loopback terminal only' });
         const settingsUrl = new URL(req.url ?? '/', origin);
         if (settingsUrl.pathname === '/settings') {
+            if (!authorized(req.headers.authorization))
+                return json(403, { error: 'Settings requires the private operator link from Codex. Reconnect Pi to reopen it.' });
             try {
                 if (req.method === 'GET') {
                     const workflowId = settingsUrl.searchParams.get('workflowId');
                     const projectId = workflowId ? (await rpc.call('workflow.status', { id: workflowId })).workflow.projectId : undefined;
-                    return json(200, { ...await settingsCall('models.settings', { ...(projectId ? { projectId } : {}) }), csrf: settingsToken });
+                    return json(200, { ...await settingsCall('models.settings', { ...(projectId ? { projectId } : {}) }), permissions: await settingsCall('permissions.read', projectId ? { projectId } : {}), csrf: settingsToken });
                 }
                 if (req.method !== 'POST')
                     return json(405, { error: 'Use GET or POST' });
@@ -91,10 +101,10 @@ export async function startTerminalBrowser(options) {
                     if (Buffer.byteLength(body) > 32768)
                         return json(413, { error: 'Settings request too large' });
                 }
-                const input = JSON.parse(body), allowed = ['connection.add', 'profile.add', 'default', 'project', 'discover', 'test'];
+                const input = JSON.parse(body), allowed = ['connection.add', 'connection.rotate', 'connection.disable', 'connection.rename', 'profile.add', 'default', 'project', 'discover', 'test', 'permissions.set'];
                 if (!allowed.includes(input.action) || !input.params || typeof input.params !== 'object' || Array.isArray(input.params))
                     return json(400, { error: 'Unknown settings action' });
-                const result = await settingsCall('models.' + input.action, input.params);
+                const result = await settingsCall(input.action === 'permissions.set' ? 'permissions.set' : 'models.' + input.action, input.params);
                 return json(200, result);
             }
             catch (e) {
@@ -116,10 +126,25 @@ export async function startTerminalBrowser(options) {
             return;
         }
         try {
+            if (url.pathname === '/history') {
+                const html = await recordedHistory(rpc, url);
+                res.writeHead(200, { ...headers, 'Content-Type': 'text/html; charset=utf-8' });
+                res.end(req.method === 'HEAD' ? undefined : html);
+                return;
+            }
             if (url.pathname === '/overview')
                 return json(200, await readTerminalOverview(rpc, url.searchParams.get('workflowId'), url.searchParams.get('assignmentId') ?? options.assignmentId));
             if (url.pathname === '/assignments') {
                 const workflowId = url.searchParams.get('workflowId');
+                if (workflowId && url.searchParams.get('history') === '1') {
+                    const before = url.searchParams.get('before');
+                    const page = await rpc.call('workflow.assignments', { id: workflowId, ...(before !== null ? { before: Number(before) } : {}), limit: 20 });
+                    const labels = assignmentLabels(page.roadmap ?? '');
+                    return json(200, { ...page, roadmap: undefined, assignments: page.assignments.map((a) => {
+                            const title = labels.get(a.id) || `Assignment ${a.number}`;
+                            return { ...a, title, label: `${title} · ${assignmentStateLabel(a.state)}` };
+                        }) });
+                }
                 const task = workflowId ? await rpc.call('workflow.status', { id: workflowId }) : null;
                 const list = task ? { assignments: task.assignments } : await rpc.call('assignments.list');
                 // Workflow order is submission order. Reviewing an old assignment updates
@@ -204,7 +229,7 @@ export async function startTerminalBrowser(options) {
         }
         catch (error) {
             const detail = observerError(error);
-            json(error instanceof RangeError ? 400 : 503, { error: error instanceof RangeError ? 'Invalid terminal dimensions' : detail.message, code: detail.code });
+            json(error instanceof RangeError ? 400 : 503, { error: error instanceof RangeError ? 'Invalid display parameters' : detail.message, code: detail.code });
         }
     });
     try {
@@ -215,7 +240,7 @@ export async function startTerminalBrowser(options) {
         throw e;
     }
     origin = `http://127.0.0.1:${server.address().port}`;
-    return { server, url: origin, async close() { for (const v of views.values()) {
+    return { server, url: origin, operatorUrl: origin + '/#operator=' + operatorToken, async close() { for (const v of views.values()) {
             v.controller.abort();
             v.response.end();
         } views.clear(); await new Promise(resolve => { server.close(() => resolve()); server.closeAllConnections(); }); ownConnection?.close(); } };

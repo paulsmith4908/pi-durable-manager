@@ -52,7 +52,7 @@ function baseRequest(home: string, overrides: Partial<SetupRequest> = {}): Setup
 }
 
 test("BETA_VERSION is the release version", () => {
-  assert.equal(BETA_VERSION, "0.7.0-beta.2");
+  assert.equal(BETA_VERSION, "0.7.0-beta.3");
 });
 
 test("validateCredentialReference accepts an env NAME and rejects a raw key shape", () => {

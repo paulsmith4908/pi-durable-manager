@@ -175,7 +175,12 @@ export declare class MetadataStore {
     private activityRow;
     getControl<T>(key: string): T | null;
     setControl(key: string, value: unknown): void;
-    /** Lossless workflow state, unlike the intentionally bounded display journal. */
+    /** Exact internal configuration, never an exported activity record or arbitrary worker text.
+     * Callers validate the configuration schema. Secret bytes are prohibited; references are allowed.
+     * Substring redaction here can corrupt endpoints, paths and authorization policies.
+     */
+    setPrivateConfiguration(key: string, value: unknown): void;
+    /** Workflow text, unlike exact private configuration, is redacted for disclosure safety. */
     setWorkflowControl(key: string, value: unknown): void;
     /** Look up a journal entry by `(kind, requestId)`. */
     getJournal(kind: string, requestId: string): JournalRecord | undefined;

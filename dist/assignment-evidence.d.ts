@@ -1,23 +1,3 @@
-/**
- * Assignment evidence + checkpoint integration helpers.
- *
- * This module centralises the structural glue between the reviewed evidence
- * (`evidence.ts`) and checkpoint (`checkpoints.ts`) primitives and the
- * assignment lifecycle in `assignments.ts`. It is deliberately PURE and
- * side-effect-free where possible so the engine keeps the durable/orchestration
- * logic and this file owns only shapes, phases, bounds, and pure transforms.
- *
- * Evidence phases
- * ---------------
- *   `capturing`   — pre-admission baseline + checkpoint are being written.
- *   `admitted`    — the checkpoint completed; the worker was admitted.
- *   `blocked`     — the checkpoint could not be completed; NO provider request
- *                   was made and the writer lease is retained.
- *   `settled`     — the after-snapshot + change set were recorded.
- *
- * The persisted `AssignmentRecord.evidence` JSON is this bundle (plus the
- * legacy fields the pre-feature code wrote, kept under `legacy`).
- */
 /** Bumped whenever the persisted evidence bundle shape changes. */
 export declare const EVIDENCE_VERSION = 1;
 export type EvidencePhase = "capturing" | "admitted" | "blocked" | "settled";
@@ -35,13 +15,8 @@ export declare const MAX_ARTIFACT_COPY_BYTES: number;
 export declare const MAX_COMMAND_RECORDS = 512;
 /** Compact evidence summary shown inline by `assignments.show` (bytes). */
 export declare const SHOW_SUMMARY_MAX_BYTES: number;
-/**
- * Names/globs that never enter a checkpoint or snapshot. The capture module
- * already rejects `.git`, `.secrets`, `.runtime` and the operator-configured
- * protected list; these are the additional secret-bearing names the engine
- * adds so credential/config/socket files in the checkout are never imaged.
- */
-export declare const EVIDENCE_PROTECTED_NAMES: readonly string[];
+/** Shared literal protected names; full patterns are enforced by isEvidenceProtected. */
+export { PROTECTED_NAMES as EVIDENCE_PROTECTED_NAMES } from "./path-protection.js";
 /** A stored command summary reference (artifact-backed full output). */
 export interface CommandRecord {
     readonly seq: number;

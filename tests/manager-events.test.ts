@@ -787,3 +787,48 @@ test("multiple events in one project coalesce into a single wake carrying each i
     await cleanup(dir);
   }
 });
+
+test('restart restores a future wake retry without another transition or polling', async () => {
+  const fx = await makeStore();
+  let store = fx.store;
+  let clock = 100000, calls = 0, handle = 0;
+  const timers = new Map<number, { due: number; fn: () => void }>();
+  const create = () => new ManagerWakeCoordinator({
+    metadata: store, coalesceMs: 0, now: () => clock,
+    dispatcher: new ManagerDispatcher({ executable: 'codex', exec: async () => {
+      calls++;
+      return calls === 1 ? { stdout: '', stderr: 'offline', code: 1 } : { stdout: '', stderr: '', code: 0 };
+    }}),
+    schedule: (fn, ms) => { const id = ++handle; timers.set(id, { due: clock + ms, fn }); return id as unknown as NodeJS.Timeout; },
+    cancel: timer => { timers.delete(timer as unknown as number); },
+  });
+  const runReady = async () => {
+    for (const [id, timer] of [...timers]) if (timer.due <= clock) { timers.delete(id); timer.fn(); }
+    await new Promise(resolve => setTimeout(resolve, 5));
+  };
+  let coordinator = create();
+  try {
+    store.upsertManagerBinding({ projectId: 'p1', threadId: 't1', requestId: 'bind', createdAt: clock, updatedAt: clock });
+    const eventId = coordinator.recordTransition({ assignmentId: 'a1', projectId: 'p1', conversationId: null, state: 'blocked', prevState: 'running' })!;
+    await runReady();
+    assert.equal(calls, 1);
+    const due = store.getManagerEvent(eventId)!.nextAttemptAt!;
+    assert.ok(due > clock);
+    await coordinator.stop();
+    assert.equal(timers.size, 0);
+    store.close();
+    store = await MetadataStore.open(join(fx.dir, 'metadata.sqlite'));
+    clock = due - 1;
+    coordinator = create();
+    coordinator.drain();
+    assert.equal(timers.size, 1, 'startup must restore the durable future deadline');
+    assert.equal([...timers.values()][0]!.due, due);
+    await runReady();
+    assert.equal(calls, 1, 'must not deliver before the deadline');
+    clock = due;
+    await runReady();
+    assert.equal(calls, 2, 'retry dispatches with no other activity');
+    assert.equal(store.getManagerEvent(eventId)!.deliveryState, 'delivered');
+    assert.equal(timers.size, 0, 'no idle polling timer after delivery');
+  } finally { await coordinator.stop(); store.close(); await cleanup(fx.dir); }
+});

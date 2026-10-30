@@ -14,8 +14,9 @@ const version = JSON.parse(await readFile(join(root, 'package.json'), 'utf8')).v
 const artifacts = join(root, 'artifacts');
 const archiveName = `pi-durable-manager-repository-${version}.zip`;
 const reportPath = join(artifacts, 'release-verification.json');
+const runtimeOnly = process.argv.includes('--runtime-only');
 const report = { version, at: new Date().toISOString(), ok: false, checks: {},
-  scope: 'Clean archive installation on the current Mac; no model or GUI wake claim.' };
+  scope: runtimeOnly ? 'CI locked runtime installation only; no Codex app, guided service setup, model or GUI wake claim.' : 'Clean archive installation on the current Mac; no model or GUI wake claim.' };
 let temp, installation, dataHome, runtimeRun;
 const hash = bytes => createHash('sha256').update(bytes).digest('hex');
 try {
@@ -50,6 +51,10 @@ try {
   const bytes = await readFile(join(pluginRoot, 'service', payload.file));
   assert.equal(hash(bytes), payload.sha256);
   assert.equal(payload.sha256, sums.get(payload.file));
+  assert.equal(payload.schemaVersion, 2);
+  assert.equal(hash(await readFile(join(pluginRoot, 'service', payload.lockFile))), payload.lockSha256);
+  assert.equal(hash(await readFile(join(pluginRoot, 'service', payload.packageFile))), payload.packageSha256);
+  report.checks.lockedDependencyGraph = true;
   report.checks.catalogAndPayload = true;
   const readme = await readFile(join(repo, 'README.md'), 'utf8');
   assert.ok(readme.includes('INSTALL.md')); await access(join(repo, 'INSTALL.md'));
@@ -61,6 +66,12 @@ try {
   runtimeRun = runtimeModule.run;
   const { configureService } = await import(pathToFileURL(join(pluginRoot, 'skills/pi-durable-manager/scripts/onboard.mjs')).href);
   dataHome = join(temp, 'private-data');
+  const locked = await runtimeModule.installRuntime({ dataHome, pluginRoot });
+  assert.equal(hash(await readFile(join(dirname(locked.bin), '../../..', 'package-lock.json'))), payload.lockSha256);
+  const lockedAgain = await runtimeModule.installRuntime({ dataHome, pluginRoot });
+  assert.equal(lockedAgain.reused, true); assert.equal(lockedAgain.lockSha256, payload.lockSha256);
+  report.checks.deterministicRuntimeInstalled = true;
+  if (!runtimeOnly) {
   installation = await configureService({ endpoint: 'http://127.0.0.1:1/v1', model: 'packaging-test-no-inference',
     contextWindow: 32768, maxTokens: 4096, noAuth: true, allowNetwork: false },
     { dataHome, pluginRoot, progress: text => process.stdout.write(text + '\n') });
@@ -80,12 +91,8 @@ try {
     assert.equal((await client.call('manager.status', {})).boundProjects, 0);
     report.checks.noWorkerOrBinding = true;
     const created = await client.call('projects.create', { name: 'instruction-scope', path: join(dataHome, 'projects/instruction-scope'), requestId: 'release-instruction-scope' }, 'release-instruction-scope');
-    const guidance = await readFile(join(created.project.path, 'AGENTS.md'), 'utf8');
-    assert.ok(guidance.includes('Audience: Codex'));
-    assert.ok(guidance.includes('Commit, tag, push, publish or deploy when explicitly requested'));
-    assert.ok(!guidance.includes('<pi-worker-policy'));
-    assert.ok(!guidance.includes('No commits, pushes, deploys'));
-    report.checks.codexOnlyGeneratedGuidance = true;
+    await assert.rejects(access(join(created.project.path, 'AGENTS.md')), { code: 'ENOENT' });
+    report.checks.noAutomaticRepoInstructions = true;
   } finally { client.close(); }
   const reused = await runtimeModule.installRuntime({ dataHome, pluginRoot });
   assert.equal(reused.reused, true); assert.equal(reused.bin, installation.bin);
@@ -94,6 +101,7 @@ try {
     contextWindow: 32768, maxTokens: 4096, noAuth: true, allowNetwork: false },
     { dataHome, pluginRoot, progress() {} }), /already exists/);
   report.checks.existingSetupPreserved = true;
+  }
   report.ok = true;
 } catch (error) {
   report.error = error.message;

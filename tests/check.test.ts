@@ -40,13 +40,13 @@ function step(partial: Partial<CheckStep> & { id: string }): CheckStep {
 }
 
 test("summarize: ok is false iff any step FAILed", () => {
-  const ok = summarize("0.7.0-beta.2", "offline", [
+  const ok = summarize("0.7.0-beta.3", "offline", [
     step({ id: "a", status: "PASS" }),
     step({ id: "b", status: "SKIP" }),
   ]);
   assert.equal(ok.ok, true, "PASS+SKIP is ok");
 
-  const bad = summarize("0.7.0-beta.2", "offline", [
+  const bad = summarize("0.7.0-beta.3", "offline", [
     step({ id: "a", status: "PASS" }),
     step({ id: "b", status: "FAIL" }),
   ]);
@@ -54,23 +54,23 @@ test("summarize: ok is false iff any step FAILed", () => {
 });
 
 test("summarize: carries version/mode and extra fields", () => {
-  const r = summarize("0.7.0-beta.2", "online", [step({ id: "a" })], {
+  const r = summarize("0.7.0-beta.3", "online", [step({ id: "a" })], {
     threadId: "11111111-2222-3333-4444-555555555555",
   });
-  assert.equal(r.version, "0.7.0-beta.2");
+  assert.equal(r.version, "0.7.0-beta.3");
   assert.equal(r.mode, "online");
   assert.equal(r.threadId, "11111111-2222-3333-4444-555555555555");
 });
 
 test("renderCheck: counts and labels each status, tags fixtures", () => {
-  const report: CheckReport = summarize("0.7.0-beta.2", "offline", [
+  const report: CheckReport = summarize("0.7.0-beta.3", "offline", [
     step({ id: "a", label: "Alpha", status: "PASS" }),
     step({ id: "b", label: "Beta", status: "FAIL", detail: "boom" }),
     step({ id: "c", label: "Gamma", status: "SKIP" }),
     step({ id: "d", label: "Delta", status: "PASS", fixture: true }),
   ]);
   const text = renderCheck(report);
-  assert.match(text, /pi-durable check 0\.7\.0-beta\.2 \[offline\]/);
+  assert.match(text, /pi-durable check 0\.7\.0-beta\.3 \[offline\]/);
   assert.match(text, /\[PASS\] Alpha — ok/);
   assert.match(text, /\[FAIL\] Beta — boom/);
   assert.match(text, /\[SKIP\] Gamma/);
@@ -80,7 +80,7 @@ test("renderCheck: counts and labels each status, tags fixtures", () => {
 
 test("renderCheck: online mode points the human at the receipt", () => {
   const report: CheckReport = summarize(
-    "0.7.0-beta.2",
+    "0.7.0-beta.3",
     "online",
     [step({ id: "a" })],
     { threadId: "11111111-2222-3333-4444-555555555555" },
@@ -212,7 +212,7 @@ test("runOfflineCheck: honest report — never FAILs when it SKIPs a missing run
     deps: DEPS,
     binPath: join(process.cwd(), "bin", "pi-durable.js"),
   });
-  assert.equal(report.version, "0.7.0-beta.2");
+  assert.equal(report.version, "0.7.0-beta.3");
   assert.equal(report.mode, "offline");
   // Whatever happened, the report must be internally consistent.
   const anyFail = report.steps.some((s) => s.status === "FAIL");
@@ -369,6 +369,6 @@ test("version constant flows through every report", async () => {
     deps: DEPS,
     binPath: join(process.cwd(), "bin", "pi-durable.js"),
   });
-  assert.equal(report.version, "0.7.0-beta.2");
+  assert.equal(report.version, "0.7.0-beta.3");
   assert.match(dirname(join(process.cwd(), "bin", "pi-durable.js")), /bin$/);
 });

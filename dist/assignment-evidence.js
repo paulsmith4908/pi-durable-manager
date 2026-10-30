@@ -1,3 +1,4 @@
+import { isProtectedRelativePath } from "./path-protection.js";
 /**
  * Assignment evidence + checkpoint integration helpers.
  *
@@ -35,21 +36,8 @@ export const MAX_ARTIFACT_COPY_BYTES = 4 * 1024 * 1024;
 export const MAX_COMMAND_RECORDS = 512;
 /** Compact evidence summary shown inline by `assignments.show` (bytes). */
 export const SHOW_SUMMARY_MAX_BYTES = 128 * 1024;
-/**
- * Names/globs that never enter a checkpoint or snapshot. The capture module
- * already rejects `.git`, `.secrets`, `.runtime` and the operator-configured
- * protected list; these are the additional secret-bearing names the engine
- * adds so credential/config/socket files in the checkout are never imaged.
- */
-export const EVIDENCE_PROTECTED_NAMES = [
-    ".git",
-    ".secrets",
-    ".runtime",
-    ".env",
-    ".env.",
-    "id_rsa",
-    "id_ed25519",
-].map((n) => n);
+/** Shared literal protected names; full patterns are enforced by isEvidenceProtected. */
+export { PROTECTED_NAMES as EVIDENCE_PROTECTED_NAMES } from "./path-protection.js";
 /** The private per-assignment directory that holds checkpoints + artifacts. */
 export function assignmentEvidenceDir(stateDir, assignmentId) {
     return join(stateDir, "checkpoints", assignmentId);
@@ -60,8 +48,7 @@ export function assignmentArtifactDir(stateDir, assignmentId) {
 }
 /** True when a relative path is on the engine's protected blocklist. */
 export function isEvidenceProtected(rel) {
-    const segs = rel.split("/");
-    return segs.some((seg) => EVIDENCE_PROTECTED_NAMES.includes(seg) || seg.startsWith(".env"));
+    return isProtectedRelativePath(rel);
 }
 /**
  * Parse a persisted evidence JSON blob into a bundle. Returns `null` for a
