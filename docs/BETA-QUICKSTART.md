@@ -3,11 +3,11 @@
 ## Send this to a friend
 
 > Open Codex on your Mac and ask: “Install Pi Durable from
-> https://github.com/paulsmith4908/pi-durable-manager at tag v0.7.0-beta.3.
-> Follow INSTALL.md and open guided setup for my model server. Preserve any
-> existing settings and check the connection.”
-> Install Pi from the **Pi Durable Beta** source in the Plugins Directory when
-> prompted. You may need to restart the app once.
+> https://github.com/paulsmith4908/pi-durable-manager. Read the current INSTALL.md
+> from the default branch and install the released plugin at tag v0.7.0-beta.3.
+> Handle registration and plugin installation for me using the
+> supported Codex commands, then open guided setup for my model details and worker
+> permissions. Preserve existing settings and check the connection.”
 >
 > In the setup page, enter your endpoint, model name, token limits and optional API
 > key, and review Pi's worker permissions. Start your model server first. Keep
@@ -15,6 +15,12 @@
 >
 > In a new chat, select Pi with **+**, describe a project and ask Codex to open the
 > live terminal. Codex plans and reviews; Pi writes the delegated code.
+
+Codex runs the installation steps; your friend does not need to copy terminal
+commands or register the repository manually. A compatible client with
+`codex plugin add` can install the plugin directly. On older clients, Codex will
+identify any remaining install click. Normal approval prompts and, when needed,
+an app restart still apply. The model server is not installed by this plugin.
 
 For a private beta without GitHub, send the repository ZIP and SHA256SUMS; a friend
 can extract it and give Codex the extracted folder instead.

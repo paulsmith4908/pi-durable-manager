@@ -11,14 +11,17 @@ questions when it needs a decision, and wakes that chat when work needs review.
 Give Codex this prompt:
 
 > Install Pi Durable from https://github.com/paulsmith4908/pi-durable-manager
-> at tag v0.7.0-beta.3. Read INSTALL.md and follow the supported plugin setup.
-> Preserve my existing settings. Open guided setup so I can enter my model
-> endpoint privately, then check the connection.
+> using the current INSTALL.md from the default branch and the released plugin at
+> tag v0.7.0-beta.3. Handle registration and installation for me using the supported
+> Codex commands, then open guided setup for my model
+> details and worker permissions. Preserve my existing settings and check the connection.
 
 [INSTALL.md](INSTALL.md) gives Codex the exact installation steps. The prepared
-repository includes a Codex marketplace and the complete plugin runtime. You may
-need to restart the app and install Pi from the Plugins Directory once. Installing
-Pi does not start a coding worker.
+repository includes a Codex marketplace and the complete plugin runtime. On clients
+with `codex plugin add`, Codex handles registration and installation without a
+manual plugin-directory step. Older clients may require one install click, and a
+new chat or app restart may be needed for the picker. Normal approval dialogs still
+apply. Installing Pi does not start a coding worker.
 
 In guided setup, provide your OpenAI-compatible Chat Completions base URL, model
 ID, context/output limits, and an API key if your server requires one. Enter keys

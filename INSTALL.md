@@ -5,13 +5,26 @@ prepared repository archive or its corresponding Git repository/tag. Do not infe
 permission to publish, start unrelated workers, change an existing provider, or
 inspect credentials from this document.
 
+Use the current guide from the repository's default branch while installing the
+pinned release below. Documentation can improve after a release; published tags
+and runtime payloads stay unchanged.
+
 ## 1. Check what is available
+
+An explicit request to install from this repository authorizes Codex to perform
+the registration, plugin installation, and runtime setup steps below. Do not send
+the user to a terminal or plugin directory when the current client can perform
+the step. A bare repository link is not, by itself, permission to install software.
 
 - macOS and Git are required. Check that Codex offers the Plugins Directory and
   local execution, and find its actual CLI executable.
 - Inspect `codex plugin marketplace add --help` and `codex queue --help`. If either
   capability is missing, explain the missing prerequisite; do not substitute an
   undocumented GUI transport or install a second Codex instance.
+- Also inspect `codex plugin add --help` and `codex plugin list --help`. Current
+  clients can install the plugin directly; older clients may require the desktop
+  installation fallback below. Use the compatible CLI bundled with the current
+  desktop app when `codex` is absent from PATH; do not change shell profiles.
 - Read `.agents/plugins/marketplace.json`. Its plugin source must resolve to
   `plugins/pi-durable-manager`, which includes `plugin.json`, the two skills, and
   `service/runtime.json` plus the matching `.tgz`.
@@ -20,7 +33,13 @@ inspect credentials from this document.
   generated `artifacts/repository/` root. Do not install the incomplete `plugin/`
   source folder as if it contained the runtime.
 
-## 2. Register this repository as a plugin source
+## 2. Register and install the plugin for the user
+
+First inspect `codex plugin marketplace list --json` and, when supported,
+`codex plugin list --marketplace pi-durable-beta --json`. Reuse a matching source
+and installed version. If an existing source points elsewhere or a different
+version is installed, report the mismatch and follow the upgrade procedure;
+do not replace it or reset a configured service as part of first-use setup.
 
 If working from a downloaded/extracted repository, run:
 
@@ -35,21 +54,36 @@ release tag or commit, not a placeholder:
 codex plugin marketplace add https://github.com/paulsmith4908/pi-durable-manager.git --ref v0.7.0-beta.3
 ```
 
-Registering a source is not installation. In the desktop app, the user opens the
-Plugins Directory, chooses **Pi Durable Beta**, and installs **pi-durable-manager**.
-Restart the app if the source is not visible. Use the supported UI/tools when
-available; otherwise tell the user the exact remaining click. Never claim the
-plugin is installed just because the marketplace command succeeded. Do not edit
-Codex cache files or overwrite the user's existing marketplace manually.
+After registration, use the supported installation command when available:
+
+```sh
+codex plugin add pi-durable-manager@pi-durable-beta --json
+codex plugin list --marketplace pi-durable-beta --json
+```
+
+Check the install receipt and list result: the exact plugin must be installed,
+enabled, and at the requested version. Registration alone is not installation.
+Use the `installedPath` returned by installation to read its setup skill. For an
+existing install, use the client-provided skill/plugin location; do not guess a
+cache path or edit cache files. Preserve existing Codex settings and marketplaces.
+
+**Older-client fallback only:** if `plugin add` is unsupported, use the supported
+desktop plugin tools/UI if available. Otherwise tell the user the remaining click:
+open the Plugins Directory, choose **Pi Durable Beta**, and install
+**pi-durable-manager**. Do not substitute an undocumented API or bypass an install
+policy or approval. A new chat or app restart may still be needed for the picker
+to discover the plugin; report this only if it is actually needed.
 
 Local/Git marketplace availability varies by client. Official reference:
 https://developers.openai.com/plugins/build/plugins#add-a-marketplace-from-the-cli
 
 ## 3. Run guided setup
 
-Select the installed plugin and invoke setup, or ask “Set up Pi Durable.” Follow
-its `skills/setup/SKILL.md`. The installed plugin contains a shell bootstrap that
-can obtain a private pinned Node runtime; friends need not build the service.
+Continue the same installation request by reading the installed plugin's
+`skills/setup/SKILL.md` and starting guided setup. The user does not need to invoke
+the plugin a second time to finish installation. The installed plugin contains a
+shell bootstrap that can obtain a private pinned Node runtime; friends need not
+build the service.
 
 Open the returned loopback setup page beside the chat. The user supplies:
 
@@ -57,6 +91,10 @@ Open the returned loopback setup page beside the chat. The user supplies:
 2. Server context window and maximum output tokens (do not guess them).
 3. API key privately in the page, or the no-auth choice.
 4. Worker permissions: editing, shell commands, development networking, and configured host validation. Review the choices before saving; excluded paths can be added later in Settings.
+
+Codex performs the installation commands; the user provides model details and
+chooses permissions. Host approval dialogs still apply. Do not promise a completely
+unattended install, infer broader worker access, or enter secrets on the user's behalf.
 
 Keep the server running. Setup installs private runtime dependencies, writes local
 configuration, and starts the service. It does not provision the inference server.

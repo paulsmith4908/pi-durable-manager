@@ -4,7 +4,10 @@
 
 Use one Git repository containing the prepared source and a self-contained plugin
 under `plugins/pi-durable-manager`. Its `.agents/plugins/marketplace.json` points
-at that folder. Friends give Codex the repository link and follow [INSTALL.md](../INSTALL.md).
+at that folder. Friends ask Codex to install from the repository link. Codex follows
+[INSTALL.md](../INSTALL.md), registers the source, installs with `codex plugin add`
+when supported, verifies the receipt, and opens guided setup. Manual plugin-directory
+installation is a fallback for clients without that command, not the default.
 A public marketplace submission is not required for this local/Git distribution.
 
 Official supported source registration:

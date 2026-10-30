@@ -68,14 +68,16 @@ Unzip this bundle, open the extracted folder in Codex, and send:
 This folder already contains a local marketplace and the expanded plugin. Codex can register
 this folder using \`codex plugin marketplace add /absolute/path/to/this/folder\`, then install
 \`pi-durable-manager@pi-durable-beta\` with \`codex plugin add\`. If the CLI is not on PATH,
-Codex can use its compatible bundled executable. A reload/new chat may be needed to discover the
-skill. Then select **Pi Durable Workers** or ask explicitly **"Use Pi Durable to set it up."**
-Codex opens a private local page that installs and starts the service for you.
+Codex can use its compatible bundled executable. It verifies installation and continues into
+guided setup in the same chat. Older clients may require an install click; a reload/new chat
+may be needed for the picker. Codex opens a private local page that installs and starts the
+service for you. Normal approval prompts still apply.
 
-1. Enter your Modal-compatible API base URL.
+1. Enter your OpenAI-compatible Chat Completions API base URL.
 2. Discover/select the model, or enter its exact ID if discovery is unavailable.
 3. Enter an API key privately in that page if required; never paste it in chat.
-4. Choose development networking, then click **Install and start Pi Durable**.
+4. Enter the model's configured context and output-token limits.
+5. Review editing, shell, networking and host-validation permissions, then click **Install and start Pi Durable**.
 
 You do not need to clone this repository or manually install the service. The plugin can
 install a private Node runtime if needed; Git/Apple developer tools and compatible Codex
@@ -84,7 +86,7 @@ global package installation, publication, or automatic delegation is used.
 
 Local service health is verified during setup. A live model coding check is a separate step;
 ask Codex to run one after reviewing the endpoint's capabilities. The existing provider
-remains Modal/OpenAI-compatible. Another physical Mac is still an untested beta limitation.
+is preserved. The plugin does not provision a model server. Another physical Mac is still an untested beta limitation.
 
 The included npm package is an optional CLI-first installation for operators. See
 \`quickstart.md\` for that route, installation details, and troubleshooting.
