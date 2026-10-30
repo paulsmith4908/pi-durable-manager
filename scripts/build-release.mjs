@@ -159,7 +159,7 @@ const GENERIC_PATH_SEGMENTS = new Set([
  * (os, homedir, the current checkout path) — never a hardcoded personal
  * fragment.
  */
-function buildContentRules() {
+export function buildContentRules(checkoutRoot = ROOT) {
   const rules = [];
   // 1. Any real `/Users/<name>` or `/home/<name>` path, except generic names.
   const accountRoots = ["/Users/", "/home/"];
@@ -204,9 +204,12 @@ function buildContentRules() {
   //    fragments). Derived from ROOT so the build process itself is portable.
   //    The package's OWN name is legitimate everywhere, so exclude it.
   const ownNames = new Set(["pi-durable-manager", "pi-durable"]);
-  for (const seg of ROOT.split(path.sep)) {
+  for (const seg of checkoutRoot.split(path.sep)) {
     const lower = seg.toLowerCase();
     if (seg.length < 4 || GENERIC_PATH_SEGMENTS.has(lower)) continue;
+    // A generic account such as GitHub's "runner" is also generic when it
+    // appears in the checkout path. Keep actual personal account/path checks.
+    if (GENERIC_HOME_NAMES.has(lower)) continue;
     if (ownNames.has(lower)) continue;
     if (/^[0-9a-f-]{20,}$/i.test(seg)) continue; // random tmp dir
     rules.push({
@@ -453,4 +456,4 @@ function main() {
   }
 }
 
-main();
+if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) main();
