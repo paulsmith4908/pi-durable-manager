@@ -1,0 +1,84 @@
+{
+  "name": "pi-durable-manager",
+  "version": "0.7.0-beta.1",
+  "description": "Portable Pi Durable service, scriptable client, guided setup, and Codex operating skill/plugin (macOS beta).",
+  "type": "module",
+  "license": "MIT",
+  "engines": {
+    "node": ">=22.19.0"
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./client": {
+      "types": "./dist/client.d.ts",
+      "import": "./dist/client.js"
+    }
+  },
+  "bin": {
+    "pi-durable": "./bin/pi-durable.js",
+    "pi-durable-terminal": "./bin/pi-durable-terminal.js"
+  },
+  "files": [
+    "dist",
+    "vendor/pi-ui",
+    "skill",
+    "plugin",
+    "example",
+    "bin",
+    "scripts/install-skill.mjs",
+    "scripts/install-plugin.mjs",
+    "tools/sandbox-diagnostic.mjs",
+    "tools/verify-scratch.mjs",
+    "tools/monitor.mjs",
+    "tools/build-pi-ui-vendor.mjs",
+    "LICENSE",
+    "README.md",
+    "docs/IMPLEMENTED.md",
+    "docs/SHARING.md",
+    "docs/BETA-QUICKSTART.md",
+    "docs/marketplace.example.json",
+    "docs/AGENTS-PI-TEMPLATE.md",
+    "docs/LOCAL-RELIABILITY.md",
+    "docs/CONTEXT-RELIABILITY.md",
+    "docs/ACTUAL-PI-TERMINAL.md",
+    "tools/verify-network.mjs",
+    "docs/SEAMLESS-WORKFLOW.md",
+    "docs/HOST-VALIDATION.md",
+    "docs/SCORECARD.md",
+    "docs/MODEL-SETTINGS.md",
+    "INSTALL.md",
+    "CHANGELOG.md"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "pretest": "npm run build && tsc -p tsconfig.test.json",
+    "test": "node --test dist-test/tests/*.test.js tests-assets/*.test.mjs",
+    "test:only": "node --test dist-test/tests/*.test.js tests-assets/*.test.mjs",
+    "sandbox:diagnostic": "npm run build && node tools/sandbox-diagnostic.mjs",
+    "sandbox:scratch": "npm run build && node tools/verify-scratch.mjs",
+    "install:skill": "node scripts/install-skill.mjs",
+    "install:plugin": "node scripts/install-plugin.mjs",
+    "prepublishOnly": "npm run build",
+    "release:build": "npm run build && node scripts/build-release.mjs",
+    "release:verify": "node scripts/verify-release.mjs"
+  },
+  "dependencies": {
+    "@earendil-works/chord": "1.4.0",
+    "@earendil-works/pi-ai": "1.4.0",
+    "@earendil-works/pi-durable": "1.4.0",
+    "@earendil-works/pi-tui": "1.4.0",
+    "@xterm/addon-fit": "0.11.0",
+    "@xterm/xterm": "6.0.0",
+    "playwright-core": "1.64.1"
+  },
+  "devDependencies": {
+    "@types/node": "22.10.2",
+    "typescript": "5.7.2"
+  }
+}

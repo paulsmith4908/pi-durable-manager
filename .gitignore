@@ -1,0 +1,30 @@
+node_modules/
+.env
+.env.*
+!.env.example
+.secrets/
+.runtime/
+config.local.json
+dist/
+dist-test/
+.DS_Store
+
+# Worker scratch / probe area — never committed.
+tools/probe-scratch/
+.scratch/
+
+# Worker staging area — integration files are removed once merged.
+.staging/
+
+# Private local settings — never committed or published.
+local-settings.json
+**/local-settings.json
+
+# Short private test socket dirs (.s/<id>/s) — never committed.
+.s/
+
+# Runtime checkpoint/artifact scratch — evidence bundles + command output copies
+# live under the configured state dir; never commit them if a state dir is rooted
+# inside the checkout during local runs.
+artifacts/
+**/artifacts/

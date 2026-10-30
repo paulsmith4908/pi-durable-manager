@@ -1,0 +1,37 @@
+import { redactString, type KnownSecrets } from "./redact.js";
+
+export interface ActivityEntry {
+  seq: number;
+  at: number;
+  kind: string;
+  projectId: string | null;
+  assignmentId: string | null;
+  requestId: string | null;
+  dedupKey: string | null;
+  data: unknown;
+}
+export type ActivityInput = Omit<ActivityEntry, "seq" | "at"> & { at?: number };
+
+/** Only emitted text/tool data is recorded. Hidden model reasoning is never a log source. */
+export function sanitizeActivity(value: unknown, secrets?: KnownSecrets, depth = 0): unknown {
+  if (depth > 8) return "[depth limited]";
+  if (typeof value === "string") {
+    const safe = redactString(value, secrets);
+    return safe.length > 12000 ? safe.slice(0, 12000) + " [truncated; full evidence retained separately]" : safe;
+  }
+  if (value === null || typeof value === "number" || typeof value === "boolean") return value;
+  if (Array.isArray(value)) return value.slice(0, 32).map(item => sanitizeActivity(item, secrets, depth + 1));
+  if (value && typeof value === "object") return Object.fromEntries(Object.entries(value).slice(0, 32).map(([key, item]) => [
+    key, /api.?key|authorization|credential|password|secret|access.?token|thinking|reasoningContent/i.test(key)
+      ? "[REDACTED]" : sanitizeActivity(item, secrets, depth + 1),
+  ]));
+  return null;
+}
+
+export function formatActivity(entry: ActivityEntry): string {
+  // Strip terminal control codes, including OSC links, from untrusted worker text.
+  const safe = (value: string): string => value.replace(/\x1b\][^\x07]*(?:\x07|\x1b\\)/g, "")
+    .replace(/[\x00-\x08\x0b-\x1f\x7f]/g, "");
+  return safe(`[${entry.seq} ${new Date(entry.at).toISOString()}] ${entry.kind}` +
+    `${entry.assignmentId ? " " + entry.assignmentId : ""}\n${JSON.stringify(entry.data, null, 2)}\n`);
+}

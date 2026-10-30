@@ -1,0 +1,38 @@
+{
+  "configVersion": 1,
+  "endpoint": "https://inference.example.invalid/v1",
+  "model": "example-model-id",
+  "limits": {
+    "contextWindow": 65536,
+    "maxTokens": 16384,
+    "maxSteps": null,
+    "timeoutMs": null
+  },
+  "paths": {
+    "stateDir": "./.runtime",
+    "projectHome": "./projects",
+    "allowedRoots": ["./projects", "./workspaces"]
+  },
+  "credential": {
+    "env": "PI_DURABLE_API_KEY"
+  },
+  "tools": {
+    "allowNetwork": false,
+    "commandTimeoutMs": null
+  },
+  "manager": {
+    "enabled": true,
+    "cliExecutable": "codex",
+    "cliBaseArgs": ["queue"],
+    "cliTimeoutMs": 30000,
+    "maxAttempts": 8
+  },
+  "compat": {
+    "supportsStore": false,
+    "supportsDeveloperRole": false,
+    "maxTokensField": "max_tokens",
+    "requiresReasoningContentOnAssistantMessages": true,
+    "thinkingFormat": "deepseek",
+    "supportsStrictMode": false
+  }
+}

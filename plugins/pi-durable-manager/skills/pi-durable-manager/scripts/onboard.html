@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Set up Pi Durable</title><link rel="stylesheet" href="/style.css"><script type="module" src="/app.js"></script></head>
+<body><main><p class="eyebrow">PI DURABLE · MACOS BETA</p><h1>Your coding workers,<br>managed from Codex.</h1>
+<p>Connect your OpenAI-compatible (llama.cpp, oMLX, Modal, or another server) model endpoint. We’ll install a private runtime and start Pi on this Mac.</p>
+<form id="setup"><label>API base URL<input id="endpoint" type="url" placeholder="https://your-endpoint.example/v1" autocomplete="off" required></label>
+<label>API key <span>(enter privately)</span><input id="key" type="password" autocomplete="off" placeholder="Enter privately here, never in chat"></label>
+<label class="choice"><input id="noAuth" type="checkbox">My endpoint does not require authentication.</label>
+<p class="hint">Auth-free endpoints receive a non-secret placeholder bearer header. Keys you enter are saved in a private local file and sent only to your endpoint.</p>
+<button id="discover" type="button" class="secondary">Find available models</button><p id="discovery" role="status"></p>
+<label>Model ID<input id="model" list="models" autocomplete="off" placeholder="Choose a discovered model, or enter its exact ID" required><datalist id="models"></datalist></label>
+<label class="choice"><input id="insecure" type="checkbox">Allow unencrypted HTTP to a remote/LAN server (prompts and credentials travel unencrypted).</label>
+<label>Context window (tokens)<input id="contextWindow" type="number" min="1" required placeholder="Use your model server's configured limit"></label>
+<label>Maximum output tokens<input id="maxTokens" type="number" min="1" required></label>
+<label class="choice"><input id="reasoning" type="checkbox">Reasoning model</label>
+<p class="hint">This becomes your default model. Add other connections and model profiles anytime in Pi → Settings. DeepSeek-specific compatibility overrides can be set there before running work.</p>
+<label class="choice"><input id="network" type="checkbox">Allow workers to download packages and run local development servers.</label>
+<p class="hint">Installation downloads dependencies from npm. If Node is missing, the plugin downloads a checksum-verified private Node runtime. Git and a compatible Codex installation are required.</p>
+<button id="install" type="submit">Install and start Pi Durable</button></form>
+<section aria-live="polite"><p id="status">Opening your private setup session…</p><pre id="details"></pre></section>
+<p class="footer">Pi only receives tasks when you select it or ask Codex to use it. Installing it does not delegate your other work.</p>
+</main></body></html>

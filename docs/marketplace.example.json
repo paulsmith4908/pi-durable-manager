@@ -1,0 +1,17 @@
+{
+  "name": "pi-durable-local",
+  "plugins": [
+    {
+      "name": "pi-durable-manager",
+      "source": {
+        "source": "local",
+        "path": "./plugins/pi-durable-manager"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "Productivity"
+    }
+  ]
+}

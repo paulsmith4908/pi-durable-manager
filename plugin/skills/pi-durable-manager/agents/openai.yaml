@@ -1,0 +1,5 @@
+interface:
+  display_name: "Pi Durable Workers"
+  short_description: "Connect Pi, watch workers, and manage delegated projects."
+policy:
+  allow_implicit_invocation: false
