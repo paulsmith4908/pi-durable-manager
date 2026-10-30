@@ -146,7 +146,7 @@ test("offline --json emits a single truthful envelope with PASS/FAIL/SKIP steps"
   const parsed = JSON.parse(lines[0]);
   assert.equal(parsed.ok, true);
   assert.equal(parsed.result.mode, "offline");
-  assert.equal(parsed.result.version, "0.7.0-beta.1");
+  assert.equal(parsed.result.version, "0.7.0-beta.2");
   assert.ok(Array.isArray(parsed.result.steps));
   for (const step of parsed.result.steps) {
     assert.ok(["PASS", "FAIL", "SKIP"].includes(step.status), `bad status ${step.status}`);

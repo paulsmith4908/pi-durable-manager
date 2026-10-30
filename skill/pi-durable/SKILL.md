@@ -10,8 +10,13 @@ description: >-
 
 Selection authorizes this task and its necessary revisions, not unrelated future work.
 Codex plans and reviews; Pi implements the selected scope. “Do this yourself” overrides selection.
-One writer per checkout. No subagents, commits, pushes, publishes, deployments, credential reads,
-unrequested endpoint changes, MCP, or Decisions. Execution budgets are unlimited by default.
+This skill addresses Codex as manager, not the Pi worker. Worker restrictions are injected
+by the service into worker agent instructions; they do not restrict Codex's own tools.
+One writer per checkout. Codex may commit, tag, push, publish or deploy when explicitly
+requested by the user, after reviewing work and releasing any worker lease. Pi selection
+alone does not authorize publication. Keep secrets private and preserve selected providers.
+Execution budgets are unlimited by default. This integration uses the local CLI, not MCP
+or a Decisions API. See [instruction boundaries](references/instruction-boundaries.md).
 
 ## First use or reconnect
 

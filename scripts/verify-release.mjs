@@ -79,6 +79,13 @@ try {
     assert.equal((await client.call('assignments.list', {})).assignments.length, 0);
     assert.equal((await client.call('manager.status', {})).boundProjects, 0);
     report.checks.noWorkerOrBinding = true;
+    const created = await client.call('projects.create', { name: 'instruction-scope', path: join(dataHome, 'projects/instruction-scope'), requestId: 'release-instruction-scope' }, 'release-instruction-scope');
+    const guidance = await readFile(join(created.project.path, 'AGENTS.md'), 'utf8');
+    assert.ok(guidance.includes('Audience: Codex'));
+    assert.ok(guidance.includes('Commit, tag, push, publish or deploy when explicitly requested'));
+    assert.ok(!guidance.includes('<pi-worker-policy'));
+    assert.ok(!guidance.includes('No commits, pushes, deploys'));
+    report.checks.codexOnlyGeneratedGuidance = true;
   } finally { client.close(); }
   const reused = await runtimeModule.installRuntime({ dataHome, pluginRoot });
   assert.equal(reused.reused, true); assert.equal(reused.bin, installation.bin);

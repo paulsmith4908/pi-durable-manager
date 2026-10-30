@@ -1179,7 +1179,7 @@ export async function runOfflineCheck(options: OfflineCheckOptions): Promise<Che
     if (workspace !== undefined) {
       return await finishOffline(steps, workspace, shortSocketDir);
     }
-    return summarize("0.7.0-beta.1", "offline", steps, {});
+    return summarize("0.7.0-beta.2", "offline", steps, {});
   }
 }
 
@@ -1197,7 +1197,7 @@ async function finishOffline(
       status: "FAIL",
       detail: `refusing to remove unverified path ${real}`,
     });
-    return summarize("0.7.0-beta.1", "offline", steps, { workspace: real });
+    return summarize("0.7.0-beta.2", "offline", steps, { workspace: real });
   }
   await rm(real, { recursive: true, force: true });
   // Remove the short socket dir only if it is a canonical
@@ -1226,7 +1226,7 @@ async function finishOffline(
     status: clean ? "PASS" : "FAIL",
     detail: clean ? "temporary workspace removed" : "temporary files still present",
   });
-  return summarize("0.7.0-beta.1", "offline", steps, { workspace: real });
+  return summarize("0.7.0-beta.2", "offline", steps, { workspace: real });
 }
 
 export interface ServiceIdentity {
@@ -1371,7 +1371,7 @@ export async function runOnlineCheck(options: OnlineCheckOptions): Promise<Check
     status: start.ok === true ? "PASS" : "FAIL",
     detail: start.ok === true ? `listening at ${socketPath}` : `start failed: ${start.code ?? "unknown"}`,
   });
-  if (start.ok !== true) return summarize("0.7.0-beta.1", "online", steps, { threadId: options.threadId });
+  if (start.ok !== true) return summarize("0.7.0-beta.2", "online", steps, { threadId: options.threadId });
 
   // A fresh, unique run id keeps every id/path distinct across invocations.
   const runId = randomUUID();
@@ -1425,7 +1425,7 @@ export async function runOnlineCheck(options: OnlineCheckOptions): Promise<Check
       detail: `refusing to mutate anything: ${redactString((error as Error).message)}`,
     });
     run.status = "receipt_not_persisted";
-    return summarize("0.7.0-beta.1", "online", steps, { threadId: options.threadId, runFile });
+    return summarize("0.7.0-beta.2", "online", steps, { threadId: options.threadId, runFile });
   }
 
   // From here on the run is durably journalled. A later persist failure is NOT
@@ -1507,7 +1507,7 @@ export async function runOnlineCheck(options: OnlineCheckOptions): Promise<Check
             stateDir: status?.stateDir ?? null,
           };
           await persistRunSafe(runFile, run, persistState, runFs);
-          return summarize("0.7.0-beta.1", "online", steps, { threadId: options.threadId, runFile });
+          return summarize("0.7.0-beta.2", "online", steps, { threadId: options.threadId, runFile });
         }
       } catch (error) {
         compatFailed = true;
@@ -1520,7 +1520,7 @@ export async function runOnlineCheck(options: OnlineCheckOptions): Promise<Check
           status: "FAIL",
           detail: `could not read service status: ${redactString((error as Error).message)}`,
         });
-        return summarize("0.7.0-beta.1", "online", steps, { threadId: options.threadId, runFile });
+        return summarize("0.7.0-beta.2", "online", steps, { threadId: options.threadId, runFile });
       }
       void compatFailed;
 
@@ -1554,7 +1554,7 @@ export async function runOnlineCheck(options: OnlineCheckOptions): Promise<Check
       if (projectId === undefined) {
         run.status = "project_failed";
         await persistRunSafe(runFile, run, persistState, runFs);
-        return summarize("0.7.0-beta.1", "online", steps, { threadId: options.threadId, runFile });
+        return summarize("0.7.0-beta.2", "online", steps, { threadId: options.threadId, runFile });
       }
 
       // 3. Bind the manager thread BEFORE submit, so the very first terminal
@@ -1585,7 +1585,7 @@ export async function runOnlineCheck(options: OnlineCheckOptions): Promise<Check
           status: "FAIL",
           detail: redactString((error as Error).message),
         });
-        return summarize("0.7.0-beta.1", "online", steps, { threadId: options.threadId, runFile });
+        return summarize("0.7.0-beta.2", "online", steps, { threadId: options.threadId, runFile });
       }
 
       // 4. A session, then ONE real sample coding assignment (unique request id).
@@ -1748,7 +1748,7 @@ export async function runOnlineCheck(options: OnlineCheckOptions): Promise<Check
   // reviews and acks. Cleanup is a SEPARATE, explicit action after review
   // (`pi-durable check --verify`); live daemon data is never removed.
 
-  return summarize("0.7.0-beta.1", "online", steps, { threadId: options.threadId, runFile });
+  return summarize("0.7.0-beta.2", "online", steps, { threadId: options.threadId, runFile });
 }
 
 /**
@@ -2013,7 +2013,7 @@ export async function verifyOnlineCheck(options: OnlineVerifyOptions): Promise<C
     status: start.ok === true ? "PASS" : "FAIL",
     detail: start.ok === true ? `listening at ${socketPath}` : `start failed: ${start.code ?? "unknown"}`,
   });
-  if (start.ok !== true) return summarize("0.7.0-beta.1", "online", steps, { threadId: run.threadId as string, runFile });
+  if (start.ok !== true) return summarize("0.7.0-beta.2", "online", steps, { threadId: run.threadId as string, runFile });
 
   try {
     const client = await PiClient.connect({ socketPath, timeoutMs: 20000 });
@@ -2132,7 +2132,7 @@ export async function verifyOnlineCheck(options: OnlineVerifyOptions): Promise<C
   // manager has reviewed and acked. It also never resubmits any mutation —
   // replaying `--verify <runId>` just re-reads the persisted run record's state.
 
-  return summarize("0.7.0-beta.1", "online", steps, { threadId: run.threadId as string, runFile });
+  return summarize("0.7.0-beta.2", "online", steps, { threadId: run.threadId as string, runFile });
 }
 
 export { defaultSetupDeps };

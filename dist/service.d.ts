@@ -27,16 +27,8 @@ export declare const PROTOCOL_VERSION = 1;
 export declare const MAX_FRAME_BYTES: number;
 /** How long a client may wait for one response by default, in milliseconds. */
 export declare const DEFAULT_CALL_TIMEOUT_MS = 60000;
-/**
- * Portable `AGENTS.md` seeded into every FRESH project repo (`projects.create`).
- *
- * Deliberately path-free and repo-agnostic: it states opt-in task routing and
- * the hard limits (one writer, no auto-commits, no secret reads) and points at
- * the INSTALLED Pi launcher, so it stays valid in any checkout and never leaks a
- * private path from the host that created it. Imports (`projects.import`) never
- * write this file — an existing `AGENTS.md` is left byte-for-byte unchanged.
- */
-export declare const PORTABLE_AGENTS_MD: string;
+/** Codex guidance only; imports never replace existing repository instructions. */
+export declare const PORTABLE_AGENTS_MD = "# AGENTS.md \u2014 Codex repository guidance\n\nAudience: Codex working in this repository. This file is not the Pi worker policy.\n\n## Task ownership\n\n- Codex handles implementation, debugging, tests and documentation by default.\n- Use Pi only when the user selects the Pi plugin/skill or explicitly requests Pi\n  for the task. That selection covers its necessary revisions and recovery, not\n  unrelated later tasks. \u201CDo this yourself\u201D keeps the specified work with Codex.\n- When Pi is selected, Codex owns the roadmap, scope, decisions, review and\n  acceptance. Use the installed Pi management skill for the operating procedure.\n- One writer per checkout. Before Codex takes over a Pi-owned checkout, inspect\n  and safely pause/stop that assignment, then verify its lease and processes are gone.\n  Do not cancel unrelated authorized work.\n\n## Authorization and evidence\n\n- Commit, tag, push, publish or deploy when explicitly requested by the user and\n  within the requested scope. Existing authorization does not need a second\n  exception merely because Pi workers cannot perform those actions.\n- Worker restrictions do not constrain Codex's use of its own tools or separately\n  authorized delegation. Do not infer authorization from plugin installation.\n- Review actual files, diffs, tests and exit codes before accepting delegated work.\n  Preserve user changes and report failures honestly.\n- Keep credentials out of chat, logs and shared files. Use approved credential\n  mechanisms without reading or printing secret values.\n- Preserve the user's selected provider/model unless asked to change it. Do not\n  silently fall back to another endpoint.\n\n## Instruction boundaries\n\n- Repository AGENTS.md contains repository guidance for Codex, not blanket Pi\n  worker prohibitions or personal provider choices.\n- The Pi management skill tells Codex how to operate Pi. Reading or reviewing\n  worker instructions does not make Codex a Pi worker.\n- The service injects Pi-only restrictions into each worker's agent instructions.\n  Workers must not copy those restrictions into shared AGENTS.md or global Codex\n  instructions. Existing imported repositories keep their own instructions.\n- If these documents drift, preserve the user-authorized task and fix the\n  instruction scope; do not turn a worker restriction into a new user policy.\n";
 /**
  * Raised for service setup/usage problems. The message is safe to surface to a
  * client: it never contains credentials or raw config objects.
@@ -115,7 +107,7 @@ export interface ServiceStatusReport {
     readonly pid: number;
     /**
      * The installed package version this service binary reports (e.g.
-     * `0.7.0-beta.1`). Callers MUST compare this against the version they expect:
+     * `0.7.0-beta.2`). Callers MUST compare this against the version they expect:
      * a service built from different sources may share the same protocol/schema
      * but not be the build this client/config was written for.
      */

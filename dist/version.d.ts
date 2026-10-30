@@ -15,7 +15,7 @@
  *      package.json version, and a test asserts they agree.
  */
 /** Kept in lock-step with package.json; a unit test asserts equality. */
-export declare const FALLBACK_PACKAGE_VERSION = "0.7.0-beta.1";
+export declare const FALLBACK_PACKAGE_VERSION = "0.7.0-beta.2";
 /** Read the installed package version, falling back truthfully if unavailable. */
 export declare function packageVersion(): string;
 //# sourceMappingURL=version.d.ts.map

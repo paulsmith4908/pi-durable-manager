@@ -1,3 +1,5 @@
+import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
+import { PI_WORKER_POLICY } from "../src/worker-instructions.js";
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtemp, mkdir, rm, readFile } from 'node:fs/promises';
@@ -17,7 +19,7 @@ async function fixture(){const dir=await mkdtemp(join(tmpdir(),'pdm-models-'));a
  const call=async(method:string,p:any={},requestId:string=randomUUID())=>{const r=await service.handle({v:1,id:requestId,method,params:{...p,requestId}});if(r.error)throw Object.assign(new Error(r.error.message),{code:r.error.code});return r.result as any;};
  const project=async(name:string)=>(await call('projects.create',{name,path:join(dir,'projects',name)})).project;
  const add=async(endpoint='http://127.0.0.1:1/v1')=>{const c=await call('models.connection.add',{name:'Local',endpoint,noAuth:true});return (await call('models.profile.add',{connectionId:c.connectionId,name:'Local model',model:'local-code',contextWindow:32768,maxTokens:4096})).profile;};
- return {dir,faux,call,project,add,restart:async()=>{await service.stop();service=await start();},close:async()=>{await service.stop();await rm(dir,{recursive:true,force:true});}};
+ return {dir,faux,call,project,add,agent:async(conversationId:string)=>{const conversation=await (service as any).harness.conversation(Number(conversationId),BACKGROUND_CONTEXT);return conversation.agent(BACKGROUND_CONTEXT);},restart:async()=>{await service.stop();service=await start();},close:async()=>{await service.stop();await rm(dir,{recursive:true,force:true});}};
 }
 test('defaults, project overrides and session pins survive restart; existing legacy model is unchanged',async()=>{const f=await fixture();try{
  const p=await f.project('old');await f.call('sessions.create',{projectId:p.id});const local=await f.add();
@@ -45,15 +47,18 @@ test('unsafe endpoint and invalid limits are rejected; remote HTTP requires expl
  await assert.rejects(f.call('models.profile.add',{connectionId:c.connectionId,name:'Bad',model:'x',contextWindow:32000,maxTokens:1000,compat:{invented:true}}),/Unknown compat/);
 }finally{await f.close();}});
 test('a paused question keeps its project model; continuation still uses the original default',async()=>{const f=await fixture();try{
+ const seen:string[]=[];
  const p=await f.project('worker'),w=(await f.call('workflow.open',{projectId:p.id,threadId:randomUUID(),objective:'Test',roadmap:'Ask then finish'})).workflow;
- f.faux.appendResponses([fauxAssistantMessage(fauxToolCall('request_manager',{question:'Continue?',context:null}),{stopReason:'toolUse'})]);
+ f.faux.appendResponses([(context)=>{seen.push(JSON.stringify(context.messages.filter(m=>m.role==='system')));return fauxAssistantMessage(fauxToolCall('request_manager',{question:'Continue?',context:null}),{stopReason:'toolUse'});}]);
  const a=(await f.call('workflow.submit',{id:w.id,task:'Ask.',criteria:'Pause'})).assignment;await f.call('assignments.wait',{id:a.id,timeoutMs:10000});
  const local=await f.add();await f.call('models.default',{profileId:local.id});
  await assert.rejects(f.call('models.project',{projectId:p.id,profileId:local.id}),/Review or stop/);
- const e=(await f.call('workflow.status',{id:w.id})).events.find((e:any)=>e.kind==='manager_request');f.faux.appendResponses([fauxAssistantMessage('Done')]);
+ const e=(await f.call('workflow.status',{id:w.id})).events.find((e:any)=>e.kind==='manager_request');f.faux.appendResponses([(context)=>{seen.push(JSON.stringify(context.messages.filter(m=>m.role==='system')));return fauxAssistantMessage('Done');}]);
  const next=(await f.call('workflow.answer',{id:w.id,eventId:e.eventId,answer:'Yes'})).assignment;
  await f.call('assignments.wait',{id:next.id,timeoutMs:10000});assert.equal((await f.call('assignments.show',{id:next.id})).state,'needs_review');
  assert.equal((await f.call('models.settings',{projectId:p.id})).projectProfileId,'existing');
+ assert.equal(seen.length,2);for(const prompt of seen){assert.ok(prompt.includes('pi-worker-policy'));assert.ok(prompt.includes('Do not commit, tag, push, publish, or deploy.'));}
+ const shared=await readFile(join(p.path,'AGENTS.md'),'utf8');assert.ok(!shared.includes(PI_WORKER_POLICY));assert.match(shared,/Commit, tag, push, publish or deploy when explicitly requested/);
 }finally{await f.close();}});
 
 async function wireFixture(coding=false){const requests:any[]=[];const server=createServer(async(req,res)=>{if(req.url==='/v1/models'){res.setHeader('Content-Type','application/json');res.end(JSON.stringify({data:[{id:'local-code'}]}));return;}let raw='';for await(const c of req)raw+=c;const body=JSON.parse(raw);requests.push(body);const result=body.messages.find((m:any)=>m.role==='tool');const nonce=body.messages.find((m:any)=>m.role==='user').content.match(/[a-f0-9]{8}-[a-f0-9-]{27}/)?.[0];res.writeHead(200,{'Content-Type':'text/event-stream'});const delta=coding?(result?{role:'assistant',content:'Created proof.txt.'}:{role:'assistant',tool_calls:[{index:0,id:'write_1',type:'function',function:{name:'write',arguments:JSON.stringify({path:'proof.txt',content:'LOCAL_PROFILE_OK\n'})}}]}):result?{role:'assistant',content:result.content}:{role:'assistant',tool_calls:[{index:0,id:'call_1',type:'function',function:{name:'readiness_echo',arguments:JSON.stringify({value:nonce})}}]};res.write(`data: ${JSON.stringify({id:'fixture',object:'chat.completion.chunk',created:1,model:'local-code',choices:[{index:0,delta,finish_reason:null}]})}\n\n`);res.write(`data: ${JSON.stringify({id:'fixture',object:'chat.completion.chunk',created:1,model:'local-code',choices:[{index:0,delta:{},finish_reason:result?'stop':'tool_calls'}]})}\n\n`);res.end('data: [DONE]\n\n');});await new Promise<void>(r=>server.listen(0,'127.0.0.1',r));return {requests,url:`http://127.0.0.1:${(server.address() as any).port}/v1`,close:()=>new Promise<void>(r=>server.close(()=>r()))};}
@@ -81,3 +86,12 @@ test('real Chrome Settings tab adds a connection/profile and selects default and
 });
 
 test('an explicit profile drives a real worker tool call, evidence and session usage through the generic endpoint',async()=>{const f=await fixture(),wire=await wireFixture(true);try{const p=await f.project('generic-code'),profile=await f.add(wire.url);const w=(await f.call('workflow.open',{projectId:p.id,threadId:randomUUID(),objective:'Write proof',roadmap:'Create and review proof.txt'})).workflow;const a=(await f.call('workflow.submit',{id:w.id,task:'Write proof.txt containing LOCAL_PROFILE_OK followed by newline.',criteria:'Exact file',profileId:profile.id})).assignment;await f.call('assignments.wait',{id:a.id,timeoutMs:10000});assert.equal((await f.call('assignments.show',{id:a.id})).state,'needs_review');assert.equal(await readFile(join(p.path,'proof.txt'),'utf8'),'LOCAL_PROFILE_OK\n');assert.equal((await f.call('sessions.inspect',{id:a.sessionId})).model.modelId,'local-code');assert.equal(wire.requests.length,2);const e=await f.call('assignments.evidence',{id:a.id});assert.ok(JSON.stringify(e).includes('proof.txt'));}finally{await wire.close();await f.close();}});
+
+ test('custom session instructions retain worker scope without changing the repo guidance',async()=>{const f=await fixture();try{
+ const p=await f.project('instruction-scope');const before=await readFile(join(p.path,'AGENTS.md'),'utf8');
+ const session=(await f.call('sessions.create',{projectId:p.id})).session;
+ await f.call('sessions.configure',{id:session.id,instructions:'Write a concise report for this test.'});
+ const transcript=JSON.stringify(await f.agent(session.conversationId));
+ assert.ok(transcript.includes('pi-worker-policy'));assert.ok(transcript.includes('Write a concise report for this test.'));
+ assert.equal(await readFile(join(p.path,'AGENTS.md'),'utf8'),before);
+}finally{await f.close();}});

@@ -2,8 +2,7 @@
 
 ## Send this to a friend
 
-> Open Codex on your Mac and give it
-> https://github.com/paulsmith4908/pi-durable-manager (tag v0.7.0-beta.1). Ask: “Install the
+> Open Codex on your Mac and give it this repository link. Ask: “Install the
 > Pi Durable plugin. Follow INSTALL.md and open guided setup for my model server.”
 > Install Pi from the **Pi Durable Beta** source in the Plugins Directory when
 > prompted. You may need to restart the app once.
@@ -14,6 +13,7 @@
 > In a new chat, select Pi with **+**, describe a project and ask Codex to open the
 > live terminal. Codex plans and reviews; Pi writes the delegated code.
 
+Replace “this repository link” with the real repository URL after publishing.
 For a private beta without GitHub, send the repository ZIP and SHA256SUMS; a friend
 can extract it and give Codex the extracted folder instead.
 

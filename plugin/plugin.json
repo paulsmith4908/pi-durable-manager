@@ -1,7 +1,7 @@
 {
   "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
   "name": "pi-durable-manager",
-  "version": "0.7.0-beta.1",
+  "version": "0.7.0-beta.2",
   "description": "Guided setup, daily controls, and manager skill for the pi-durable-manager macOS beta. Skills-only: drives the local Pi Durable service while Codex stays CTO.",
   "extensions": {
     "com.openai": {

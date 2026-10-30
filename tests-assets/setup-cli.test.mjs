@@ -73,7 +73,7 @@ test("noninteractive setup writes a private 0600 config with a reference credent
   assert.equal(res.code, 0, res.stderr);
   const envelope = JSON.parse(res.stdout.trim());
   assert.equal(envelope.ok, true);
-  assert.equal(envelope.result.version, "0.7.0-beta.1");
+  assert.equal(envelope.result.version, "0.7.0-beta.2");
   assert.equal(envelope.result.configWritten, true);
   assert.equal(envelope.result.skillInstalled, false, "no installer => not claimed installed");
 

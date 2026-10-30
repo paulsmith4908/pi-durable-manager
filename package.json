@@ -1,6 +1,6 @@
 {
   "name": "pi-durable-manager",
-  "version": "0.7.0-beta.1",
+  "version": "0.7.0-beta.2",
   "description": "Portable Pi Durable service, scriptable client, guided setup, and Codex operating skill/plugin (macOS beta).",
   "type": "module",
   "license": "MIT",
@@ -52,7 +52,8 @@
     "docs/SCORECARD.md",
     "docs/MODEL-SETTINGS.md",
     "INSTALL.md",
-    "CHANGELOG.md"
+    "CHANGELOG.md",
+    "docs/INSTRUCTION-BOUNDARIES.md"
   ],
   "scripts": {
     "build": "tsc -p tsconfig.json",

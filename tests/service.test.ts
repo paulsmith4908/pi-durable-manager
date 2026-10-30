@@ -405,12 +405,13 @@ test("projects.create initializes a repo, is idempotent, and rejects conflicts",
     assert.equal(created.project.origin, "created");
     await stat(join(projectPath, ".git"));
 
-    // A fresh repo is seeded with the portable AGENTS.md (CTO roles + hard limits).
+    // A fresh repo is seeded with the portable AGENTS.md (Codex-only guidance).
     const agents = await readFile(join(projectPath, "AGENTS.md"), "utf8");
-    assert.match(agents, /Codex remains the CTO/);
+    assert.match(agents, /Audience: Codex/);
     assert.match(agents, /One writer per checkout/);
-    assert.match(agents, /No commits, pushes, deploys/);
-    assert.match(agents, /Never read secrets/);
+    assert.match(agents, /Commit, tag, push, publish or deploy when explicitly requested/);
+    assert.doesNotMatch(agents, /<pi-worker-policy|No commits, pushes, deploys/);
+    assert.match(agents, /Keep credentials out of chat/);
     assert.doesNotMatch(agents, /\/Users\//, "portable AGENTS.md must not leak host paths");
 
     const replay = await client.call<{ project: { id: string }; replayed: boolean }>(

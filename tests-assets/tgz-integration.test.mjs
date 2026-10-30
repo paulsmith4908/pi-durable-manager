@@ -175,7 +175,7 @@ test("installed tarball runs from an unrelated cwd with a restricted PATH", { ti
       const env = { ...process.env, HOME: home, PATH: restrictedPath() };
       const version = run("node", [bin, "--version"], { cwd, env });
       assert.equal(version.code, 0, `installed --version failed:\n${version.stderr}`);
-      assert.match(version.stdout, /pi-durable-manager 0\.7\.0-beta\.1/);
+      assert.match(version.stdout, /pi-durable-manager 0\.7\.0-beta\.2/);
 
       const help = run("node", [bin, "--help"], { cwd, env });
       assert.equal(help.code, 0, `installed --help failed:\n${help.stderr}`);
@@ -234,7 +234,7 @@ test("installed tarball runs from an unrelated cwd with a restricted PATH", { ti
       assert.equal(plugin.code, 0, `plugin install failed:\n${plugin.stdout}\n${plugin.stderr}`);
       const pluginJson = JSON.parse(plugin.stdout);
       assert.equal(pluginJson.plugin, "pi-durable-manager");
-      assert.equal(pluginJson.version, "0.7.0-beta.1");
+      assert.equal(pluginJson.version, "0.7.0-beta.2");
       assert.ok(existsSync(path.join(pluginDest, "plugin.json")), "installed plugin.json missing");
 
       // The catalog must be a valid marketplace manifest pointing at the

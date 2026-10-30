@@ -29,8 +29,9 @@ not treat the absence of a cap as an error, and do not invent one.
   you through the documented `codex queue` CLI on real state changes — no 45 s GPT polling needed.
   On an **unbound** project nothing wakes Codex automatically: reconnect with the persisted IDs on
   your next turn, or bind the project.
-- **One writer per checkout.** No automated commits, pushes, deploys, or publishes; never read
-  secrets.
+- **One writer per checkout.** Pi workers leave commit/push/publication/deployment to Codex.
+  Codex can perform these actions when explicitly requested by the user after reviewing the
+  work and releasing its worker lease. Never expose credentials.
 - Do not silently bypass permission errors. Use the permission mechanism the user has already
   authorized; do not ask for redundant approval when it is already granted.
 - Do not pretend an unsupported/unknown method succeeded. Report it.

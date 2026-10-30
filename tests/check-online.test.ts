@@ -90,7 +90,7 @@ test("runOnlineCheck: drives a real config → service → fixture transport →
       threadId: THREAD_ID,
     });
 
-    assert.equal(report.version, "0.7.0-beta.1");
+    assert.equal(report.version, "0.7.0-beta.2");
     assert.equal(report.mode, "online");
     assert.equal(report.threadId, THREAD_ID);
 

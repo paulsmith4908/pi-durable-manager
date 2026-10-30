@@ -18,7 +18,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 /** Kept in lock-step with package.json; a unit test asserts equality. */
-export const FALLBACK_PACKAGE_VERSION = "0.7.0-beta.1";
+export const FALLBACK_PACKAGE_VERSION = "0.7.0-beta.2";
 let cached;
 /** Read the installed package version, falling back truthfully if unavailable. */
 export function packageVersion() {

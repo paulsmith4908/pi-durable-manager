@@ -32,7 +32,7 @@ For a repository already hosted on GitHub, use its **actual** URL and the select
 release tag or commit, not a placeholder:
 
 ```sh
-codex plugin marketplace add https://github.com/paulsmith4908/pi-durable-manager.git --ref v0.7.0-beta.1
+codex plugin marketplace add https://github.com/paulsmith4908/pi-durable-manager.git --ref v0.7.0-beta.2
 ```
 
 Registering a source is not installation. In the desktop app, the user opens the

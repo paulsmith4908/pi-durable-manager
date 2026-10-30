@@ -5,6 +5,8 @@ description: Set up the Pi Durable plugin when the user runs plugin setup. Insta
 
 # Set up Pi Durable
 
+This skill addresses Codex during setup. Pi worker instructions do not govern Codex.
+
 Setup configures Pi; it does not authorize delegation of unrelated work. Preserve an existing installation and its model connection.
 
 Read `../pi-durable-manager/SKILL.md` for the launcher and connection workflow. Run `/bin/sh <PLUGIN_ROOT>/skills/pi-durable-manager/scripts/setup.sh` if installation is missing and open its returned private loopback URL beside the chat. The user enters endpoint, model, limits and optional key in that page. Never inspect password values, credential files, or put keys in chat, arguments or parameter files.

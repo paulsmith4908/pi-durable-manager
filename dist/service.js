@@ -1,3 +1,5 @@
+import { CODEX_REPO_GUIDANCE } from "./codex-repo-guidance.js";
+import { withWorkerPolicy } from "./worker-instructions.js";
 import { ModelSettings, MODEL_OPERATIONS } from './model-settings.js';
 import { parseProfile, profileKey, recentValidation } from "./host-validation.js";
 import { briefView } from "./working-brief.js";
@@ -56,66 +58,8 @@ const LOCK_FILE_NAME = "service.lock";
 const METADATA_FILE_NAME = "metadata.sqlite";
 /** File name of Pi's durable store inside the state directory. */
 const PI_STORE_FILE_NAME = "pi.sqlite";
-/**
- * Portable `AGENTS.md` seeded into every FRESH project repo (`projects.create`).
- *
- * Deliberately path-free and repo-agnostic: it states opt-in task routing and
- * the hard limits (one writer, no auto-commits, no secret reads) and points at
- * the INSTALLED Pi launcher, so it stays valid in any checkout and never leaks a
- * private path from the host that created it. Imports (`projects.import`) never
- * write this file — an existing `AGENTS.md` is left byte-for-byte unchanged.
- */
-export const PORTABLE_AGENTS_MD = [
-    "# AGENTS.md \u2014 Codex with optional Pi Durable",
-    "",
-    "Codex remains the CTO and handles this repository directly by default. Pi Durable is available only",
-    "for tasks the user explicitly opts into, as described below.",
-    "",
-    "## Task routing \u2014 Pi is opt-in",
-    "",
-    "- **Codex handles tasks directly by default**, including implementation, debugging, tests, and docs.",
-    "- Delegate only when the user selects/invokes the Pi plugin or skill for the task, or explicitly",
-    "  asks to use Pi. Installation, enabled state, a Pi-managed repo, a past selection, mentioning Pi,",
-    "  or reading these instructions does not authorize delegation.",
-    "- A selection or request covers the current task and its necessary revisions/recovery until done.",
-    "  Unrelated later tasks return to Codex. A narrower instruction such as \"write this yourself\"",
-    "  takes precedence; delegate only the portions explicitly assigned to Pi in a mixed request.",
-    "- Persist the selected owner and scope in the handoff/roadmap for delegated work. Existing event",
-    "  IDs may resume that authorized work; a stale wake must not restart completed work or expand scope.",
-    "- **One writer per checkout**, including Codex. Before switching a live Pi checkout to Codex,",
-    "  inspect/checkpoint the assignment, safely release its lease, and verify its processes are gone.",
-    "  Do not cancel unrelated authorized work simply because a new task defaults to Codex.",
-    "",
-    "## Roles when Pi is selected",
-    "",
-    "Codex owns planning, scoping, review, and acceptance. Pi implements only the delegated scope.",
-    "Read the installed Pi skill's `references/operations.md` when needed and confirm the exact live",
-    "RPC descriptors with `service.capabilities`; prefer the live surface over static copies.",
-    "",
-    "## Delegation rules (only for authorized Pi work)",
-    "",
-    "- Each delegated task is a **bounded-scope assignment** with explicit acceptance criteria.",
-    "- Persist the returned project/assignment/session IDs (and request IDs) so Codex can",
-    "  reconnect after a client restart or native compaction.",
-    "- **Inspect real evidence** before accepting: changed files (including untracked files),",
-    "  diffs, test logs, exit codes. Never fabricate pass/fail numbers.",
-    "- **One writer per checkout.** No worker-onward delegation unless explicitly authorized.",
-    "",
-    "## Hard limits",
-    "",
-    "- No commits, pushes, deploys, or publishes. No automated commits.",
-    "- Never read secrets or credentials.",
-    "- Unknown/unsupported methods are real errors \u2014 never pretend an unsupported call succeeded.",
-    "",
-    "## Switching ownership",
-    "",
-    "Direct Codex work is the default, not a fallback requiring separate permission. Within an",
-    "explicitly Pi-delegated scope, report a Pi failure and preserve the user's chosen owner unless",
-    "the user redirects that work to Codex. Apply the one-writer handoff above before switching.",
-    "",
-    "The no-commit / no-push / no-deploy / no-publish / no-secret-read limits always apply.",
-    "",
-].join("\n");
+/** Codex guidance only; imports never replace existing repository instructions. */
+export const PORTABLE_AGENTS_MD = CODEX_REPO_GUIDANCE;
 /** Prefix used for auto-generated project/session ids. */
 const ID_PREFIX = "pdm";
 /** Default Unix socket path length ceiling (Linux `sun_path` is 108 incl. NUL). */
@@ -1625,7 +1569,7 @@ export class PiDurableService {
             change.thinkingLevel = level;
         }
         if (params.instructions !== undefined) {
-            change.instructions = this.redactString(requireString(params, "instructions"));
+            change.instructions = withWorkerPolicy(this.redactString(requireString(params, "instructions")));
         }
         if (params.model !== undefined) {
             // Allow only the pinned model, and only by exact match, to make an

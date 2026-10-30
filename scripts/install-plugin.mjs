@@ -49,7 +49,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ASSETS_ROOT = path.resolve(__dirname, "..");
 const SOURCE_PLUGIN = path.join(ASSETS_ROOT, "plugin");
 const PLUGIN_NAME = "pi-durable-manager";
-const PLUGIN_VERSION = "0.7.0-beta.1";
+const PLUGIN_VERSION = "0.7.0-beta.2";
 const SKILL_NAME = "pi-durable-manager";
 
 class UsageError extends Error {}

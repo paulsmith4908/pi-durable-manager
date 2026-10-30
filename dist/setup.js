@@ -28,7 +28,7 @@ import { CliUsageError } from "./cli-args.js";
 import { canonicalPath, firstUserSymlinkAncestor } from "./paths.js";
 import { redactString } from "./redact.js";
 /** The beta release this tool reports. Kept in one place for setup/check/docs. */
-export const BETA_VERSION = "0.7.0-beta.1";
+export const BETA_VERSION = "0.7.0-beta.2";
 /**
  * The package name used for the portable Codex plugin + skill.
  *

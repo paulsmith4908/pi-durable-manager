@@ -1,5 +1,15 @@
 # Changes
 
+## 0.7.0-beta.2 — separate Codex and Pi instruction scopes
+
+- Codex repo guidance permits explicitly user-requested Git and release actions.
+- Pi-only restrictions stay in worker agent instructions, including continuations
+  and custom session instruction updates.
+- Manager/setup skills identify their Codex audience; generated repos no longer
+  inherit worker prohibitions or a personal model connection.
+- Regression checks cover instruction delivery, imported repo preservation and
+  template/skill packaging consistency.
+
 ## 0.7.0-beta.1 — prepared macOS sharing release
 
 - Clean repository marketplace with the complete, checksum-verified plugin payload.
